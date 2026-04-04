@@ -1,0 +1,11 @@
+{
+  "uuid": "display-profiles@realh",
+  "name": "Display Profiles",
+  "description": "A GNOME Shell extension for quick display configuration switching",
+  "shell-version": [
+    "49"
+  ],
+  "url": "https://github.com/realh/display-profiles",
+  "gettext-domain": "display-profiles",
+  "version": 1
+}

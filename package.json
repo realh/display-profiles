@@ -1,0 +1,37 @@
+{
+  "name": "display-profiles",
+  "version": "0.0.1",
+  "description": "A GNOME Shell extension for quick display configuration switching",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && gjs -m ./dist/tests/showstate.js",
+    "test1": "tsc && gjs -m ./dist/tests/showstate.js",
+    "test2": "tsc && gjs -m ./dist/tests/save.js"
+  },
+  "keywords": [
+    "gnome-shell",
+    "extension",
+    "typescript",
+    "gjs",
+    "esm"
+  ],
+  "author": "Tony Houghton",
+  "license": "GPL-2.0-or-later",
+  "type": "module",
+  "devDependencies": {
+    "@girs/gio-2.0": "^2.88.0-4.0.0-rc.1",
+    "@girs/gjs": "^4.0.0-rc.1",
+    "@girs/glib-2.0": "^2.88.0-4.0.0-rc.1",
+    "@girs/gnome-shell": "^49.1.0",
+    "@girs/st-18": "^18.0.0-4.0.0-rc.1",
+    "typescript": "^6.0.2"
+  },
+  "overrides": {
+    "@girs/gio-2.0": "$@girs/gio-2.0",
+    "@girs/glib-2.0": "$@girs/glib-2.0",
+    "@girs/gobject-2.0": "$@girs/gobject-2.0",
+    "@girs/cairo-1.0": "$@girs/cairo-1.0",
+    "@girs/gjs": "$@girs/gjs"
+  }
+}

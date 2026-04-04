@@ -1,0 +1,4 @@
+dist/src/*.js
+dist/tests
+node_modules
+.tsbuildinfo
