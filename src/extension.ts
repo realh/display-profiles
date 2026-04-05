@@ -5,6 +5,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import { DisplayConfigsManager } from './data.js';
+import { DisplayProfilesPopdown } from './uipopdown.js';
 
 // Change to false for release
 const debug = true;
@@ -12,14 +13,16 @@ const debug = true;
 export default class DisplayProfilesExtension extends Extension {
     #indicator: PanelMenu.Button | null = null;
     #icon: St.Icon | null = null;
-    // #popdown: DispProfsPopdown | null = null;
+    #popdown: DisplayProfilesPopdown | null = null;
     #manager = new DisplayConfigsManager(() => {
         this.onDisplayStateChanged();
     }, debug);
 
     override enable() {
-        // const _log = debug ? console.log : () => {};
+        const _log = debug ? console.log : () => {};
+        _log("DP@realh: DisplayProfiles extension enabled");
         this.#manager.init();
+        _log("DP@realh: DisplayProfiles extension enabled");
         this.#indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
         this.#icon = new St.Icon({
             gicon: new Gio.ThemedIcon({ name: 'video-display-symbolic' }),
@@ -85,26 +88,28 @@ export default class DisplayProfilesExtension extends Extension {
             this.#indicator.can_focus = true;
             this.#icon ? this.#icon.opacity = 255 : undefined;
         }
+        _log("DP@realh: Rebuilding popdown");
+        this.#popdown?.rebuild();
     }
 
     handleIconClick() {
         if (!this.#indicator) {
-            console.error("Null indicator button clicked");
+            console.error("DP@realh: Null indicator button clicked");
             return;
         }
-        if (debug) {
-            console.log('DP@realh: DisplayProfiles icon clicked');
-        }
+        const _log = debug ? console.log : () => {};
+        _log("DP@realh: DisplayProfiles icon clicked");
         const menu = this.#indicator.menu as PopupMenu.PopupMenu;
         if (menu.isOpen) {
+            _log("DP@realh: Closing popdown");
             menu.close();
-        // } else {
-        //     if (!this.#popdown) {
-        //         this.#popdown = new DispProfsPopdown(
-        //             menu,
-        //             this.#profsManager);
-        //     }
-        //     menu.open();
+        } else {
+            if (!this.#popdown) {
+                _log("DP@realh: Creating popdown UI");
+                this.#popdown = new DisplayProfilesPopdown(menu, this.#manager);
+            }
+            _log("DP@realh: Opening menu");
+            menu.open();
         }
     }
 }
