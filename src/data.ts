@@ -20,7 +20,7 @@ interface ModeScales {
     supportedScales: number[];
 }
 
-interface PhysicalMonitor {
+export interface PhysicalMonitor {
     readonly connector: string;
     readonly modeId: string;
     /** undefined means underscanning is unsupported */
@@ -55,7 +55,7 @@ interface PhysicalMonitorAndModes extends PhysicalMonitor {
     readonly supportedModes: Map<string, ModeScales> | undefined;
 }
 
-interface LogicalMonitor {
+export interface LogicalMonitor {
     readonly x: number;
     readonly y: number;
     readonly scale: number;
@@ -103,7 +103,7 @@ function compareLogicalMonitors(
 /**
  * DisplayConfig represents a single possible display configuration.
  */
-interface DisplayConfig {
+export interface DisplayConfig {
     readonly logicalMonitors: LogicalMonitor[];
     readonly layoutMode: "logical" | "physical";
     // The following properties are not saved in favourites.
@@ -245,10 +245,9 @@ export class DisplayConfigsManager {
     {
         this.#stateChangedCallback = stateChangedCallback;
         this.#debug = debug;
-        this.#init();
     }
 
-    async #init() {
+    async init() {
         const [state, favourites] = await Promise.all([
             this.#getInitialDBusState(),
             this.#loadFavourites(),

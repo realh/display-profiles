@@ -11,26 +11,28 @@ const debug = true;
 
 export default class DisplayProfilesExtension extends Extension {
     #indicator: PanelMenu.Button | null = null;
+    #icon: St.Icon | null = null;
     // #popdown: DispProfsPopdown | null = null;
-    #profsManager = new DisplayConfigsManager(() => {
+    #manager = new DisplayConfigsManager(() => {
         this.onDisplayStateChanged();
     }, debug);
 
     override enable() {
-        const _log = debug ? console.log : () => {};
+        // const _log = debug ? console.log : () => {};
+        this.#manager.init();
         this.#indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
-        const icon = new St.Icon({
+        this.#icon = new St.Icon({
             gicon: new Gio.ThemedIcon({ name: 'video-display-symbolic' }),
             style_class: 'system-status-icon'
         });
-        this.#indicator.add_child(icon);
+        this.#indicator.add_child(this.#icon);
         this.#indicator.connect('button-press-event', () => {
             this.handleIconClick();
             return true;
         });
 
         const menu = this.#indicator.menu as PopupMenu.PopupMenu;
-        menu.connect('open-state-changed', (menu, isOpen) => {
+        menu.connect('open-state-changed', (_, isOpen) => {
             if (this.#indicator) {
                 if (isOpen) {
                     this.#indicator.add_style_pseudo_class('checked');
@@ -47,6 +49,8 @@ export default class DisplayProfilesExtension extends Extension {
         });
 
         Main.panel.addToStatusArea(this.uuid, this.#indicator);
+
+        this.onDisplayStateChanged();
     }
 
     override disable() {
@@ -58,14 +62,29 @@ export default class DisplayProfilesExtension extends Extension {
     }
 
     onDisplayStateChanged() {
-        if (debug) {
-            console.log("Display state changed: " +
-                       (this.#profsManager.waiting ? "waiting" : "ready"));
+        const _log = debug ? console.log : () => {};
+        _log("DP@realh: Display state changed: " +
+                   (this.#manager.waiting ? "waiting" : "ready"));
+        if (!this.#indicator) {
+            console.error(
+                "DisplayProfiles@realh: Panel button is null at state change");
+            return;
         }
-        // const menu = this.#indicator?.menu;
-        // if (menu instanceof PopupMenu.PopupMenu && menu.isOpen) {
-        //     this.#popdown?.rebuild();
-        // }
+        const waiting = this.#manager.waiting;
+        const menu = this.#indicator.menu;
+        const uiIsOpen = menu instanceof PopupMenu.PopupMenu && menu.isOpen;
+        if (waiting && !uiIsOpen) {
+            _log("DP@realh: Disabling panel button");
+            this.#indicator.reactive = false;
+            this.#indicator.can_focus = false;
+            this.#icon ? this.#icon.opacity = 100 : undefined;
+            return;
+        } else {
+            _log("DP@realh: Enabling panel button");
+            this.#indicator.reactive = true;
+            this.#indicator.can_focus = true;
+            this.#icon ? this.#icon.opacity = 255 : undefined;
+        }
     }
 
     handleIconClick() {
