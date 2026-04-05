@@ -1,5 +1,4 @@
 {
-  "uuid": "display-profiles@realh",
   "name": "Display Profiles",
   "description": "A GNOME Shell extension for quick display configuration switching",
   "shell-version": [
