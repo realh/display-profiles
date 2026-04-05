@@ -22,7 +22,6 @@ export default class DisplayProfilesExtension extends Extension {
         const _log = debug ? console.log : () => {};
         _log("DP@realh: DisplayProfiles extension enabled");
         this.#manager.init();
-        _log("DP@realh: DisplayProfiles extension enabled");
         this.#indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
         this.#icon = new St.Icon({
             gicon: new Gio.ThemedIcon({ name: 'video-display-symbolic' }),
