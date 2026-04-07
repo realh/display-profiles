@@ -1,11 +1,12 @@
 import Gio from 'gi://Gio';
 import St from 'gi://St';
+import Clutter from 'gi://Clutter';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import { DisplayConfigsManager } from './data.js';
-import { DisplayProfilesPopdown } from './uipopdown.js';
+import { DisplayProfilesGrid } from './grid.js';
 
 // Change to false for release
 const debug = true;
@@ -13,10 +14,10 @@ const debug = true;
 export default class DisplayProfilesExtension extends Extension {
     #indicator: PanelMenu.Button | null = null;
     #icon: St.Icon | null = null;
-    #popdown: DisplayProfilesPopdown | null = null;
     #manager = new DisplayConfigsManager(() => {
         this.onDisplayStateChanged();
     }, debug);
+    #profilesGrid: DisplayProfilesGrid | null = null;
 
     override enable() {
         const _log = debug ? console.log : () => {};
@@ -29,26 +30,24 @@ export default class DisplayProfilesExtension extends Extension {
         });
         this.#indicator.add_child(this.#icon);
         this.#indicator.connect('button-press-event', () => {
-            this.handleIconClick();
-            return true;
+            return this.handleIconClick();
         });
 
-        const menu = this.#indicator.menu as PopupMenu.PopupMenu;
-        menu.connect('open-state-changed', (_, isOpen) => {
-            if (this.#indicator) {
-                if (isOpen) {
-                    this.#indicator.add_style_pseudo_class('checked');
-                } else {
-                    this.#indicator.remove_style_pseudo_class('checked');
-                }
-            }
-            // if (!isOpen) {
-            //     this.#profsManager.commitChanges().catch(e => {
-            //         console.error("Failed to commit favorite changes", e);
-            //     });
-            // }
-            return false;
-        });
+        // menu.connect('open-state-changed', (_, isOpen) => {
+        //     // if (this.#indicator) {
+        //     //     if (isOpen) {
+        //     //         this.#indicator.add_style_pseudo_class('checked');
+        //     //     } else {
+        //     //         this.#indicator.remove_style_pseudo_class('checked');
+        //     //     }
+        //     // }
+        //     // if (!isOpen) {
+        //     //     this.#profsManager.commitChanges().catch(e => {
+        //     //         console.error("Failed to commit favorite changes", e);
+        //     //     });
+        //     // }
+        //     return false;
+        // });
 
         Main.panel.addToStatusArea(this.uuid, this.#indicator);
 
@@ -60,7 +59,7 @@ export default class DisplayProfilesExtension extends Extension {
             this.#indicator.destroy();
             this.#indicator = null;
         }
-        // this.#popdown = null;
+        this.#profilesGrid = null;
     }
 
     onDisplayStateChanged() {
@@ -73,7 +72,7 @@ export default class DisplayProfilesExtension extends Extension {
             return;
         }
         const waiting = this.#manager.waiting;
-        const menu = this.#indicator.menu;
+        const menu = this.#indicator.menu as PopupMenu.PopupMenu;
         const uiIsOpen = menu instanceof PopupMenu.PopupMenu && menu.isOpen;
         if (waiting && !uiIsOpen) {
             _log("DP@realh: Disabling panel button");
@@ -88,7 +87,19 @@ export default class DisplayProfilesExtension extends Extension {
             this.#icon ? this.#icon.opacity = 255 : undefined;
         }
         _log("DP@realh: Rebuilding popdown");
-        this.#popdown?.rebuild();
+        if (this.#profilesGrid) {
+            this.#profilesGrid.rebuild();
+        } else {
+            const section = new PopupMenu.PopupMenuSection();
+            this.#profilesGrid = new DisplayProfilesGrid(this.#manager);
+            section.actor.add_child(this.#profilesGrid);
+            menu.addMenuItem(section);
+        }
+
+        // if (!this.#popdown) {
+        //     this.#popdown = new DisplayProfilesPopdown(menu, this.#manager);
+        // }
+        // this.#popdown?.rebuild();
     }
 
     handleIconClick() {
@@ -100,15 +111,15 @@ export default class DisplayProfilesExtension extends Extension {
         _log("DP@realh: DisplayProfiles icon clicked");
         const menu = this.#indicator.menu as PopupMenu.PopupMenu;
         if (menu.isOpen) {
-            _log("DP@realh: Closing popdown");
-            menu.close();
+            _log("DP@realh: Closing popdown/menu");
+            // menu.close();
         } else {
-            if (!this.#popdown) {
-                _log("DP@realh: Creating popdown UI");
-                this.#popdown = new DisplayProfilesPopdown(menu, this.#manager);
-            }
-            _log("DP@realh: Opening menu");
-            menu.open();
+            // if (!this.#popdown) {
+            //     _log("DP@realh: Creating popdown UI");
+            // }
+            _log("DP@realh: Opening popdown/menu");
+            // menu.open();
         }
+        return Clutter.EVENT_PROPAGATE;
     }
 }
