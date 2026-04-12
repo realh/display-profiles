@@ -1,6 +1,5 @@
 import Clutter from "gi://Clutter";
 import Gio from "gi://Gio";
-import GObject from "gi://GObject";
 import St from "gi://St";
 import { DisplayConfig } from "./data.js";
 import {
@@ -96,19 +95,22 @@ export class DisplayProfilesMenuBuilder {
                      waiting: boolean, showTransforms: boolean,
                      showConnectors: boolean, showScales: boolean)
     {
+        let hboxStyle = "spacing: 5px; margin-bottom: 5px;";
+        const numMonitors = config.logicalMonitors.reduce(
+            (n, m) => m.physicalMonitors.length + n, 0);
+        if (items.length > 0 && numMonitors > 1) {
+            items.push(new PopupSeparatorMenuItem());
+        } else {
+            hboxStyle += " margin-top: 5px;";
+        }
         const hbox = new St.BoxLayout({
-            style_class: 'dispprofs-config-row',
+            // style_class: "dispprofs-config-row",
+            style: hboxStyle,
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
             vertical: false,
             orientation: Clutter.Orientation.HORIZONTAL,
         });
-        const numMonitors = config.logicalMonitors.reduce(
-            (n, m) => m.physicalMonitors.length + n, 0);
-
-        if (items.length > 0 && numMonitors > 1) {
-            items.push(new PopupSeparatorMenuItem());
-        }
 
         // Column 0: Radio button
         const radioButton = this.#makeRadioButton(config, waiting);
@@ -117,7 +119,7 @@ export class DisplayProfilesMenuBuilder {
         // The middle column of the row at the menu level is a clickable
         // column of monitor descriptions.
         const vbox = new St.BoxLayout({
-            style_class: 'dispprofs-monitor-col',
+            // style_class: "dispprofs-monitor-col",
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
             vertical: true,
@@ -130,7 +132,7 @@ export class DisplayProfilesMenuBuilder {
             x_expand: true,
             x_align: Clutter.ActorAlign.FILL,
         });
-        //button.connect('clicked', () => this._onApplyConfig(config, true));
+        //button.connect("clicked", () => this._onApplyConfig(config, true));
         hbox.add_child(button);
 
         for (const lm of config.logicalMonitors) {
@@ -139,7 +141,7 @@ export class DisplayProfilesMenuBuilder {
             for (let i = 0; i < lm.physicalMonitors.length; i++) {
                 // Each row of the the column is a box containing 1 - 4 labels
                 const monRow = new St.BoxLayout({
-                    style_class: 'dispprofs-monitor-row',
+                    // style_class: "dispprofs-monitor-row",
                     vertical: false,
                     orientation: Clutter.Orientation.HORIZONTAL,
                 });
@@ -148,21 +150,21 @@ export class DisplayProfilesMenuBuilder {
                 if (showConnectors) {
                     monRow.add_child(new St.Label({
                         text: pm.connector,
-                        style_class: 'dispprofs-monitor-label',
+                        // style_class: "dispprofs-monitor-label",
                         x_expand: false,
                         x_align: Clutter.ActorAlign.START,
                     }))
                 }
                 monRow.add_child(new St.Label({
                     text: i > 0 ? "mirrored" : pm.modeId,
-                    style_class: 'dispprofs-monitor-label',
+                    // style_class: "dispprofs-monitor-label",
                     x_expand: true,
-                    x_align: Clutter.ActorAlign.START,
+                    x_align: Clutter.ActorAlign.FILL,
                 }))
                 if (i == 0 && showScales) {
                     monRow.add_child(new St.Label({
                         text: scale,
-                        style_class: 'dispprofs-monitor-label',
+                        // style_class: "dispprofs-monitor-label",
                         x_expand: false,
                         x_align: Clutter.ActorAlign.END,
                     }))
@@ -170,7 +172,7 @@ export class DisplayProfilesMenuBuilder {
                 if (i == 0 && showTransforms) {
                     monRow.add_child(new St.Label({
                         text: transform,
-                        style_class: 'dispprofs-monitor-label',
+                        // style_class: "dispprofs-monitor-label",
                         x_expand: false,
                         x_align: Clutter.ActorAlign.END,
                     }))
@@ -194,22 +196,22 @@ export class DisplayProfilesMenuBuilder {
     #makeRadioButton(config: DisplayConfig, waiting: boolean): St.Button {
         const radioIcon = new St.Icon({
             gicon: new Gio.ThemedIcon({
-                name: config.isCurrent ? 'radio-checked-symbolic' :
-                    'radio-symbolic'
+                name: config.isCurrent ? "radio-checked-symbolic" :
+                    "radio-symbolic"
             }),
-            style_class: 'system-status-icon',
+            style_class: "popup-menu-icon",
             x_expand: false,
         });
         const radioButton = new St.Button({
             child: radioIcon,
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
-            style_class: 'dispprofs-radio-button'
+            // style_class: "dispprofs-radio-button"
         });
         if (!config.isCompatible) {
             radioButton.opacity = 128;
         }
-        // radioButton.connect('clicked', () => {
+        // radioButton.connect("clicked", () => {
         //     this._onApplyConfig(config, false);
         // });
         return radioButton;
@@ -218,13 +220,13 @@ export class DisplayProfilesMenuBuilder {
     #makeStarButton(config: DisplayConfig, waiting: boolean): St.Button {
         const stIcon = new St.Icon({
             gicon: this.#getStarGIconForConfig(config),
-            style_class: 'system-status-icon'
+            style_class: "popup-menu-icon"
         });
         const button = new St.Button({
             child: stIcon,
             reactive: !waiting,
             can_focus: !waiting,
-            style_class: 'dispprofs-star-button',
+            // style_class: "dispprofs-star-button",
             x_expand: false,
         });
         button.connect('clicked', () => {
