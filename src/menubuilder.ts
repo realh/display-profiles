@@ -10,6 +10,9 @@ import {
 
 type PopupMenuChild = PopupBaseMenuItem | PopupMenuSection;
 
+const SPACING = 8;
+const SPC_PX = `${SPACING}px`;
+
 export class DisplayProfilesMenuBuilder {
     #log: (...args: any) => void;
     #filledStarGIcon: Gio.ThemedIcon | null = null;
@@ -95,13 +98,13 @@ export class DisplayProfilesMenuBuilder {
                      waiting: boolean, showTransforms: boolean,
                      showConnectors: boolean, showScales: boolean)
     {
-        let hboxStyle = "spacing: 5px; margin-bottom: 5px;";
+        let hboxStyle = `spacing: ${SPC_PX}; margin-bottom: ${SPC_PX};`;
         const numMonitors = config.logicalMonitors.reduce(
             (n, m) => m.physicalMonitors.length + n, 0);
         if (items.length > 0 && numMonitors > 1) {
             items.push(new PopupSeparatorMenuItem());
         } else {
-            hboxStyle += " margin-top: 5px;";
+            hboxStyle += ` margin-top: ${SPC_PX};`;
         }
         const hbox = new St.BoxLayout({
             // style_class: "dispprofs-config-row",
@@ -120,10 +123,13 @@ export class DisplayProfilesMenuBuilder {
         // column of monitor descriptions.
         const vbox = new St.BoxLayout({
             // style_class: "dispprofs-monitor-col",
+            style: "spacing: ${SPC_PX};",
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
             vertical: true,
             orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
         });
         const button = new St.Button({
             child: vbox,
@@ -142,40 +148,23 @@ export class DisplayProfilesMenuBuilder {
                 // Each row of the the column is a box containing 1 - 4 labels
                 const monRow = new St.BoxLayout({
                     // style_class: "dispprofs-monitor-row",
+                    style: `spacing: ${SPC_PX};`,
                     vertical: false,
                     orientation: Clutter.Orientation.HORIZONTAL,
                 });
                 const pm = lm.physicalMonitors[i];
 
                 if (showConnectors) {
-                    monRow.add_child(new St.Label({
-                        text: pm.connector,
-                        // style_class: "dispprofs-monitor-label",
-                        x_expand: false,
-                        x_align: Clutter.ActorAlign.START,
-                    }))
+                    monRow.add_child(this.#makeLabel(pm.connector, false));
                 }
-                monRow.add_child(new St.Label({
-                    text: i > 0 ? "mirrored" : pm.modeId,
-                    // style_class: "dispprofs-monitor-label",
-                    x_expand: true,
-                    x_align: Clutter.ActorAlign.FILL,
-                }))
+                monRow.add_child( this.#makeLabel(
+                    i > 0 ? "mirrored" : pm.modeId,
+                    true));
                 if (i == 0 && showScales) {
-                    monRow.add_child(new St.Label({
-                        text: scale,
-                        // style_class: "dispprofs-monitor-label",
-                        x_expand: false,
-                        x_align: Clutter.ActorAlign.END,
-                    }))
+                    monRow.add_child(this.#makeLabel(scale, false));
                 }
                 if (i == 0 && showTransforms) {
-                    monRow.add_child(new St.Label({
-                        text: transform,
-                        // style_class: "dispprofs-monitor-label",
-                        x_expand: false,
-                        x_align: Clutter.ActorAlign.END,
-                    }))
+                    monRow.add_child(this.#makeLabel(transform, false));
                 }
 
                 vbox.add_child(monRow);
@@ -255,4 +244,12 @@ export class DisplayProfilesMenuBuilder {
         }
     }
 
+    #makeLabel(text: string, expand: boolean): St.Label {
+        return new St.Label({
+            text,
+            // style_class: "dispprofs-monitor-label",
+            x_expand: expand,
+            x_align: Clutter.ActorAlign.START,
+        });
+    }
 };
