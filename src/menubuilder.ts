@@ -10,6 +10,8 @@ import {
 
 type PopupMenuChild = PopupBaseMenuItem | PopupMenuSection;
 
+const SPACING = 5;
+
 export class DisplayProfilesMenuBuilder {
     #log: (...args: any) => void;
     #filledStarGIcon: Gio.ThemedIcon | null = null;
@@ -95,13 +97,13 @@ export class DisplayProfilesMenuBuilder {
                      waiting: boolean, showTransforms: boolean,
                      showConnectors: boolean, showScales: boolean)
     {
-        let hboxStyle = "spacing: 5px; margin-bottom: 5px;";
+        let hboxStyle = `spacing: ${SPACING}px; margin-bottom: ${SPACING}px;`;
         const numMonitors = config.logicalMonitors.reduce(
             (n, m) => m.physicalMonitors.length + n, 0);
         if (items.length > 0 && numMonitors > 1) {
             items.push(new PopupSeparatorMenuItem());
         } else {
-            hboxStyle += " margin-top: 5px;";
+            hboxStyle += " margin-top: ${SPACING}px;";
         }
         const hbox = new St.BoxLayout({
             // style_class: "dispprofs-config-row",
@@ -116,17 +118,19 @@ export class DisplayProfilesMenuBuilder {
         const radioButton = this.#makeRadioButton(config, waiting);
         hbox.add_child(radioButton);
 
-        // The middle column of the row at the menu level is a clickable
-        // column of monitor descriptions.
-        const vbox = new St.BoxLayout({
+        // The middle column of the menu item row is a clickable grid of
+        // monitor descriptions.
+        const layout = new Clutter.GridLayout();
+        layout.set_column_spacing(SPACING);
+        layout.set_row_spacing(SPACING);
+        const grid = new St.Widget({
             // style_class: "dispprofs-monitor-col",
+            layout_manager: layout,
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
-            vertical: true,
-            orientation: Clutter.Orientation.VERTICAL,
         });
         const button = new St.Button({
-            child: vbox,
+            child: grid,
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
             x_expand: true,
@@ -134,51 +138,29 @@ export class DisplayProfilesMenuBuilder {
         });
         //button.connect("clicked", () => this._onApplyConfig(config, true));
         hbox.add_child(button);
-
         for (const lm of config.logicalMonitors) {
             const scale = showScales ? `${Math.floor(lm.scale * 100)}%` : "";
             const transform = showTransforms ? lm.transform : "";
             for (let i = 0; i < lm.physicalMonitors.length; i++) {
-                // Each row of the the column is a box containing 1 - 4 labels
-                const monRow = new St.BoxLayout({
-                    // style_class: "dispprofs-monitor-row",
-                    vertical: false,
-                    orientation: Clutter.Orientation.HORIZONTAL,
-                });
+                // Each row in the grid contains 1 to 4 columns
+                let col = 0;
                 const pm = lm.physicalMonitors[i];
 
                 if (showConnectors) {
-                    monRow.add_child(new St.Label({
-                        text: pm.connector,
-                        // style_class: "dispprofs-monitor-label",
-                        x_expand: false,
-                        x_align: Clutter.ActorAlign.START,
-                    }))
+                    layout.attach(this.#makeLabel(pm.connector, false),
+                                  col++, i, 1, 1);
                 }
-                monRow.add_child(new St.Label({
-                    text: i > 0 ? "mirrored" : pm.modeId,
-                    // style_class: "dispprofs-monitor-label",
-                    x_expand: true,
-                    x_align: Clutter.ActorAlign.FILL,
-                }))
+                layout.attach(
+                    this.#makeLabel(i > 0 ? "mirrored" : pm.modeId, true),
+                    col++, i, 1, 1);
                 if (i == 0 && showScales) {
-                    monRow.add_child(new St.Label({
-                        text: scale,
-                        // style_class: "dispprofs-monitor-label",
-                        x_expand: false,
-                        x_align: Clutter.ActorAlign.END,
-                    }))
+                    layout.attach(this.#makeLabel(scale, false),
+                                  col++, i, 1, 1);
                 }
                 if (i == 0 && showTransforms) {
-                    monRow.add_child(new St.Label({
-                        text: transform,
-                        // style_class: "dispprofs-monitor-label",
-                        x_expand: false,
-                        x_align: Clutter.ActorAlign.END,
-                    }))
+                    layout.attach(this.#makeLabel(transform, false),
+                                  col++, i, 1, 1);
                 }
-
-                vbox.add_child(monRow);
             }
         }
 
@@ -191,6 +173,15 @@ export class DisplayProfilesMenuBuilder {
         const itemSection = new PopupMenuSection();
         itemSection.actor.add_child(hbox);
         items.push(itemSection);
+    }
+
+    #makeLabel(text: string, expand: boolean): St.Label {
+        return new St.Label({
+            text: text,
+            // style_class: "dispprofs-label",
+            x_expand: expand,
+            x_align: Clutter.ActorAlign.START,
+        });
     }
 
     #makeRadioButton(config: DisplayConfig, waiting: boolean): St.Button {
