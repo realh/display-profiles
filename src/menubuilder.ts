@@ -109,7 +109,7 @@ export class DisplayProfilesMenuBuilder {
         const hbox = new St.BoxLayout({
             // style_class: "dispprofs-config-row",
             style: hboxStyle,
-            reactive: config.isCompatible && !waiting,
+            reactive: !waiting,
             can_focus: config.isCompatible && !waiting,
             vertical: false,
             orientation: Clutter.Orientation.HORIZONTAL,
@@ -127,20 +127,24 @@ export class DisplayProfilesMenuBuilder {
         const grid = new St.Widget({
             // style_class: "dispprofs-monitor-col",
             layout_manager: layout,
-            reactive: config.isCompatible && !waiting,
+            reactive: !waiting,
             can_focus: config.isCompatible && !waiting,
             x_expand: true,
             x_align: Clutter.ActorAlign.FILL,
         });
-        const button = new St.Button({
-            child: grid,
-            reactive: config.isCompatible && !waiting,
-            can_focus: config.isCompatible && !waiting,
-            x_expand: true,
-            x_align: Clutter.ActorAlign.FILL,
-        });
-        //button.connect("clicked", () => this._onApplyConfig(config, true));
-        hbox.add_child(button);
+        if (config.isCompatible && !waiting) {
+            const button = new St.Button({
+                child: grid,
+                reactive: true,
+                can_focus: true,
+                x_expand: true,
+                x_align: Clutter.ActorAlign.FILL,
+            });
+            //button.connect("clicked", () => this._onApplyConfig(config, true));
+            hbox.add_child(button);
+        } else {
+            hbox.add_child(grid);
+        }
         for (const lm of config.logicalMonitors) {
             const scale = showScales ? `${Math.floor(lm.scale * 100)}%` : "";
             const transform = showTransforms ? lm.transform : "";
@@ -150,19 +154,45 @@ export class DisplayProfilesMenuBuilder {
                 const pm = lm.physicalMonitors[i];
 
                 if (showConnectors) {
-                    layout.attach(this.#makeLabel(pm.connector, false),
-                                  col++, i, 1, 1);
+                    layout.attach(
+                        this.#makeLabel(
+                            pm.connector,
+                            false,
+                            config.isCompatible,
+                            pm.preferredMode == pm.modeId
+                        ),
+                        col++, i, 1, 1
+                    );
                 }
                 layout.attach(
-                    this.#makeLabel(i > 0 ? "mirrored" : pm.modeId, true),
+                    this.#makeLabel(
+                        i > 0 ? "mirrored" : pm.modeId,
+                        true,
+                        config.isCompatible,
+                        pm.preferredMode == pm.modeId
+                    ),
                     col++, i, 1, 1);
                 if (i == 0 && showScales) {
-                    layout.attach(this.#makeLabel(scale, false),
-                                  col++, i, 1, 1);
+                    layout.attach(
+                        this.#makeLabel(
+                            scale,
+                            false,
+                            config.isCompatible,
+                            pm.preferredScale == lm.scale
+                        ),
+                        col++, i, 1, 1
+                    );
                 }
                 if (i == 0 && showTransforms) {
-                    layout.attach(this.#makeLabel(transform, false),
-                                  col++, i, 1, 1);
+                    layout.attach(
+                        this.#makeLabel(
+                            transform,
+                            false,
+                            config.isCompatible,
+                            false
+                        ),
+                        col++, i, 1, 1
+                    );
                 }
             }
         }
@@ -240,12 +270,20 @@ export class DisplayProfilesMenuBuilder {
         }
     }
 
-    #makeLabel(text: string, expand: boolean): St.Label {
-        return new St.Label({
+    #makeLabel(text: string, expand: boolean,
+               isCompatible: boolean = true, isPreferred: boolean): St.Label
+    {
+        const label = new St.Label({
             text,
             // style_class: "dispprofs-monitor-label",
             x_expand: expand,
             x_align: Clutter.ActorAlign.START,
         });
+        if (!isCompatible) {
+            label.style = "color: #ff9060;";
+        } else if (isPreferred) {
+            label.style = "color: green;";
+        }
+        return label;
     }
 };
