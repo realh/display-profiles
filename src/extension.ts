@@ -6,7 +6,10 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import { DisplayConfigsManager } from './data.js';
-import { DisplayProfilesGrid } from './grid.js';
+import { DisplayProfilesMenuBuilder } from './menubuilder.js';
+import type {
+    ExtensionMetadata
+} from 'gi://gnome-shell/dist/types/extension-metadata.js';
 
 // Change to false for release
 const debug = true;
@@ -17,11 +20,18 @@ export default class DisplayProfilesExtension extends Extension {
     #manager = new DisplayConfigsManager(() => {
         this.onDisplayStateChanged();
     }, debug);
-    #profilesGrid: DisplayProfilesGrid | null = null;
+    #menuBuilder = new DisplayProfilesMenuBuilder(debug);
+    #log: (...args: any) => void
+
+    constructor(metadata: ExtensionMetadata) {
+        super(metadata);
+        this.#log = debug ? (...args: any) =>
+                console.log("DP@realh:", ...args) :
+            () => {};
+    }
 
     override enable() {
-        const _log = debug ? console.log : () => {};
-        _log("DP@realh: DisplayProfiles extension enabled");
+        this.#log("DisplayProfiles extension enabled");
         this.#manager.init();
         this.#indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
         this.#icon = new St.Icon({
@@ -59,12 +69,10 @@ export default class DisplayProfilesExtension extends Extension {
             this.#indicator.destroy();
             this.#indicator = null;
         }
-        this.#profilesGrid = null;
     }
 
     onDisplayStateChanged() {
-        const _log = debug ? console.log : () => {};
-        _log("DP@realh: Display state changed: " +
+        this.#log("Display state changed: " +
                    (this.#manager.waiting ? "waiting" : "ready"));
         if (!this.#indicator) {
             console.error(
@@ -74,32 +82,39 @@ export default class DisplayProfilesExtension extends Extension {
         const waiting = this.#manager.waiting;
         const menu = this.#indicator.menu as PopupMenu.PopupMenu;
         const uiIsOpen = menu instanceof PopupMenu.PopupMenu && menu.isOpen;
-        if (waiting && !uiIsOpen) {
-            _log("DP@realh: Disabling panel button");
+
+        let disable = waiting && !uiIsOpen;
+        let configs = this.#manager.getConfigs();
+        if (!waiting) {
+            // If there are no display modes at all (no favourites and we're
+            // running in a window) keep the button disabled.
+            if (configs.length == 0) {
+                disable = true;
+                if (uiIsOpen) {
+                    menu.close();
+                }
+            }
+        }
+
+        if (disable) {
+            this.#log("Disabling panel button");
             this.#indicator.reactive = false;
             this.#indicator.can_focus = false;
             this.#icon ? this.#icon.opacity = 100 : undefined;
             return;
         } else {
-            _log("DP@realh: Enabling panel button");
+            this.#log("Enabling panel button");
             this.#indicator.reactive = true;
             this.#indicator.can_focus = true;
             this.#icon ? this.#icon.opacity = 255 : undefined;
         }
-        _log("DP@realh: Rebuilding popdown");
-        if (this.#profilesGrid) {
-            this.#profilesGrid.rebuild();
-        } else {
-            const section = new PopupMenu.PopupMenuSection();
-            this.#profilesGrid = new DisplayProfilesGrid(this.#manager);
-            section.actor.add_child(this.#profilesGrid);
-            menu.addMenuItem(section);
-        }
 
-        // if (!this.#popdown) {
-        //     this.#popdown = new DisplayProfilesPopdown(menu, this.#manager);
-        // }
-        // this.#popdown?.rebuild();
+        this.#log("Rebuilding menu body table");
+        menu.removeAll();
+        const menuItems = this.#menuBuilder.build(configs, waiting);
+        for (const item of menuItems) {
+            menu.addMenuItem(item);
+        }
     }
 
     handleIconClick() {
@@ -107,17 +122,16 @@ export default class DisplayProfilesExtension extends Extension {
             console.error("DP@realh: Null indicator button clicked");
             return;
         }
-        const _log = debug ? console.log : () => {};
-        _log("DP@realh: DisplayProfiles icon clicked");
+        this.#log("DisplayProfiles icon clicked");
         const menu = this.#indicator.menu as PopupMenu.PopupMenu;
         if (menu.isOpen) {
-            _log("DP@realh: Closing popdown/menu");
+            this.#log("Closing popdown/menu");
             // menu.close();
         } else {
             // if (!this.#popdown) {
-            //     _log("DP@realh: Creating popdown UI");
+            //     this.#log("Creating popdown UI");
             // }
-            _log("DP@realh: Opening popdown/menu");
+            this.#log("Opening popdown/menu");
             // menu.open();
         }
         return Clutter.EVENT_PROPAGATE;

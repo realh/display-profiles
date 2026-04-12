@@ -248,13 +248,22 @@ export class DisplayConfigsManager {
     }
 
     async init() {
-        const [state, favourites] = await Promise.all([
-            this.#getInitialDBusState(),
-            this.#loadFavourites(),
-        ]);
-        this.#currentState = state;
-        this.#allConfigs = favourites;
-        this.#updateConfigsForState();
+        try {
+            const [state, favourites] = await Promise.all([
+                this.#getInitialDBusState(),
+                this.#loadFavourites(),
+            ]);
+            this.#currentState = state;
+            this.#allConfigs = favourites;
+            this.#updateConfigsForState();
+        } catch (e) {
+            console.error("DisplayProfiles@realh: " +
+                "Error initialising DisplayConfigsManager:", e);
+            if (!(e instanceof Error)) {
+                e = new Error(`${e}`);
+            }
+            this.#stateChangedCallback(e as Error);
+        }
     }
 
     async #getInitialDBusState(): Promise<DisplayState> {
@@ -332,11 +341,19 @@ export class DisplayConfigsManager {
             return;
         }
         const current = this.#currentState.getDisplayConfig();
-        if (!this.#identifyCurrentConfig(current)) {
+
+        // current may have no monitors if we're running nested or something
+        // like that.
+        if (current.logicalMonitors.length === 0 ||
+            current.logicalMonitors.every(
+                (lm) => lm.physicalMonitors.length === 0))
+        {
+            for (const config of this.#allConfigs) {
+                config.isCompatible = false;
+            }
+        } else if (!this.#identifyCurrentConfig(current)) {
             this.#allConfigs.unshift(current);
         }
-        // TODO: Check whether any configs are incompatible and move them
-        // to the end.
         this.#waiting = 0;
         this.#stateChangedCallback(this);
     }
