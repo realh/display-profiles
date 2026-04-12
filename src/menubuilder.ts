@@ -10,7 +10,8 @@ import {
 
 type PopupMenuChild = PopupBaseMenuItem | PopupMenuSection;
 
-const SPACING = 5;
+const SPACING = 8;
+const SPC_PX = `${SPACING}px`;
 
 export class DisplayProfilesMenuBuilder {
     #log: (...args: any) => void;
@@ -97,13 +98,13 @@ export class DisplayProfilesMenuBuilder {
                      waiting: boolean, showTransforms: boolean,
                      showConnectors: boolean, showScales: boolean)
     {
-        let hboxStyle = `spacing: ${SPACING}px; margin-bottom: ${SPACING}px;`;
+        let hboxStyle = `spacing: ${SPC_PX}; margin-bottom: ${SPC_PX};`;
         const numMonitors = config.logicalMonitors.reduce(
             (n, m) => m.physicalMonitors.length + n, 0);
         if (items.length > 0 && numMonitors > 1) {
             items.push(new PopupSeparatorMenuItem());
         } else {
-            hboxStyle += " margin-top: ${SPACING}px;";
+            hboxStyle += ` margin-top: ${SPC_PX};`;
         }
         const hbox = new St.BoxLayout({
             // style_class: "dispprofs-config-row",
@@ -128,6 +129,8 @@ export class DisplayProfilesMenuBuilder {
             layout_manager: layout,
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
         });
         const button = new St.Button({
             child: grid,
@@ -173,15 +176,6 @@ export class DisplayProfilesMenuBuilder {
         const itemSection = new PopupMenuSection();
         itemSection.actor.add_child(hbox);
         items.push(itemSection);
-    }
-
-    #makeLabel(text: string, expand: boolean): St.Label {
-        return new St.Label({
-            text: text,
-            // style_class: "dispprofs-label",
-            x_expand: expand,
-            x_align: Clutter.ActorAlign.START,
-        });
     }
 
     #makeRadioButton(config: DisplayConfig, waiting: boolean): St.Button {
@@ -246,4 +240,12 @@ export class DisplayProfilesMenuBuilder {
         }
     }
 
+    #makeLabel(text: string, expand: boolean): St.Label {
+        return new St.Label({
+            text,
+            // style_class: "dispprofs-monitor-label",
+            x_expand: expand,
+            x_align: Clutter.ActorAlign.START,
+        });
+    }
 };
