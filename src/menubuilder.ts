@@ -282,7 +282,7 @@ export class DisplayProfilesMenuBuilder {
         if (!isCompatible) {
             label.style = "color: #ff9060;";
         } else if (isPreferred) {
-            label.style = "color: green;";
+            label.style = "color: #60ff90;";
         }
         return label;
     }
