@@ -20,7 +20,17 @@ export default class DisplayProfilesExtension extends Extension {
     #manager = new DisplayConfigsManager(() => {
         this.onDisplayStateChanged();
     }, debug);
-    #menuBuilder = new DisplayProfilesMenuBuilder(debug);
+    get #menu(): PopupMenu.PopupMenu | undefined {
+        return this.#indicator?.menu as PopupMenu.PopupMenu;
+    }
+    #menuBuilder = new DisplayProfilesMenuBuilder(
+        (config, closeMenu) => {
+            this.#manager?.applyConfig(config);
+            if (closeMenu && this.#menu?.isOpen) {
+                this.#menu?.close();
+            }
+        },
+        debug);
     #log: (...args: any) => void
 
     constructor(metadata: ExtensionMetadata) {
@@ -80,8 +90,8 @@ export default class DisplayProfilesExtension extends Extension {
             return;
         }
         const waiting = this.#manager.waiting;
-        const menu = this.#indicator.menu as PopupMenu.PopupMenu;
-        const uiIsOpen = menu instanceof PopupMenu.PopupMenu && menu.isOpen;
+        const menu = this.#menu;
+        const uiIsOpen = menu?.isOpen;
 
         let disable = waiting && !uiIsOpen;
         let configs = this.#manager.getConfigs();
@@ -110,10 +120,10 @@ export default class DisplayProfilesExtension extends Extension {
         }
 
         this.#log("Rebuilding menu body table");
-        menu.removeAll();
+        menu?.removeAll();
         const menuItems = this.#menuBuilder.build(configs, waiting);
         for (const item of menuItems) {
-            menu.addMenuItem(item);
+            menu?.addMenuItem(item);
         }
     }
 

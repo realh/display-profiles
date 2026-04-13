@@ -1,6 +1,7 @@
 import type {
     DisplayConfigStateTuple,
     LogicalMonitorStateTuple,
+    MonitorsConfigTuple,
     PhysicalMonitorStateTuple,
 } from "./tuples.js";
 
@@ -270,6 +271,10 @@ export class DisplayConfigsManager {
         return this.#waiting !== 0;
     }
 
+    get currentSerial(): number {
+        return this.#currentState?.serial || 0;
+    }
+
     constructor(stateChangedCallback: DisplayStateChangedCallback,
                 debug: boolean = false)
     {
@@ -510,6 +515,31 @@ export class DisplayConfigsManager {
             console.error("Failed to save favourites to " + file.get_path(), e);
             return false;
         }
+    }
+
+    applyConfig(config: DisplayConfig) {
+        const props = {
+            "layout-mode": config.layoutMode == "physical" ? 2 : 1
+        };
+        const monitorConfigs = config.logicalMonitors.map(lm => {
+            const pmConfigs = lm.physicalMonitors.map(pm => {
+                return [
+                    pm.connector,
+                    pm.modeId,
+                    { underscanning: pm.underscanning },
+                ];
+            });
+            let transform = Math.max(
+                monitorTransformNames.indexOf(lm.transform), 0);
+            return [ lm.x, lm.y, lm.scale, transform, lm.primary, pmConfigs ];
+        });
+        const monsCfg = [
+            this.currentSerial,
+            1,  // 1 = apply temporarily
+            monitorConfigs,
+            props,
+        ] as MonitorsConfigTuple;
+        this.#dbusProxy?.applyMonitorsConfigAsync(monsCfg);
     }
 
     static DISPLAY_PROFILES_ID = "display-profiles@realh";

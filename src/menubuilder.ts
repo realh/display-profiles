@@ -14,12 +14,16 @@ export class DisplayProfilesMenuBuilder {
     #log: (...args: any) => void;
     #filledStarGIcon: Gio.ThemedIcon | null = null;
     #hollowStarGIcon: Gio.ThemedIcon | null = null;
+    #onApplyConfig: (config: DisplayConfig, closeMenu: boolean) => void
 
-    constructor(debug: boolean) {
+    constructor(
+        onApplyConfig: (config: DisplayConfig, closeMenu: boolean) => void,
+        debug: boolean
+    ) {
         this.#log = debug ? (...args: any) =>
                 console.log("DP@realh grid:", ...args) :
             () => {};
-
+        this.#onApplyConfig = onApplyConfig
     }
 
     build(configs: DisplayConfig[], waiting: boolean): PopupBaseMenuItem[] {
@@ -134,7 +138,7 @@ export class DisplayProfilesMenuBuilder {
                 x_align: Clutter.ActorAlign.FILL,
                 style_class: "popup-menu-item",
             });
-            //button.connect("clicked", () => this._onApplyConfig(config, true));
+            button.connect("clicked", () => this.#onApplyConfig(config, true));
             hbox.add_child(button);
         } else {
             hbox.add_child(grid);
@@ -224,9 +228,9 @@ export class DisplayProfilesMenuBuilder {
         if (!config.isCompatible) {
             radioButton.opacity = 128;
         }
-        // radioButton.connect("clicked", () => {
-        //     this._onApplyConfig(config, false);
-        // });
+        radioButton.connect("clicked", () => {
+            this.#onApplyConfig(config, false);
+        });
         return radioButton;
     }
 
