@@ -52,7 +52,7 @@ function comparePhysicalMonitors(
 }
 
 interface PhysicalMonitorAndModes extends PhysicalMonitor {
-    readonly supportedModes: Map<string, ModeScales> | undefined;
+    readonly supportedModes: Map<string, ModeScales>;
 }
 
 export interface LogicalMonitor {
@@ -101,15 +101,20 @@ function compareLogicalMonitors(
 }
 
 /**
- * DisplayConfig represents a single possible display configuration.
+ * The fields of DisplayConfig that are saved in favourites.json.
  */
-export interface DisplayConfig {
+export interface SavedDisplayConfig {
     readonly logicalMonitors: LogicalMonitor[];
     readonly layoutMode: "logical" | "physical";
-    // The following properties are not saved in favourites.
-    isCurrent: boolean | undefined;
-    isFavourite: boolean | undefined;
-    isCompatible: boolean | undefined;
+}
+
+/**
+ * DisplayConfig represents a single possible display configuration.
+ */
+export interface DisplayConfig extends SavedDisplayConfig {
+    isCurrent: boolean;
+    isFavourite: boolean;
+    isCompatible: boolean;
 }
 
 /**
@@ -124,6 +129,10 @@ export class DisplayState {
     #physicalMonitors: Map<string, PhysicalMonitorAndModes> = new Map();
     #logicalMonitors: LogicalMonitor[];
     #layoutMode: 1 | 2 | undefined;
+
+    get layoutMode(): "logical" | "physical" {
+        return this.#layoutMode === 2 ? "physical" : "logical";
+    }
 
     #supportsChangingLayoutMode: boolean;
     get supportsChangingLayoutMode(): boolean {
@@ -212,11 +221,31 @@ export class DisplayState {
     getDisplayConfig(): DisplayConfig {
         return {
             logicalMonitors: deepCopy(this.#logicalMonitors),
-            layoutMode: this.#layoutMode === 2 ? "physical" : "logical",
+            layoutMode: this.layoutMode,
             isCurrent: true,
             isFavourite: false,
             isCompatible: true,
         };
+    }
+
+    checkCompatibility(config: SavedDisplayConfig): boolean {
+        if (config.layoutMode !== this.layoutMode &&
+            !this.supportsChangingLayoutMode)
+        {
+            return false;
+        }
+        for (const lm of config.logicalMonitors) {
+            for (const pm of lm.physicalMonitors) {
+                const currentPm = this.#physicalMonitors.get(pm.connector);
+                if (!currentPm) {
+                    return false;
+                }
+                if (!currentPm.supportedModes.has(pm.modeId)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }
 
@@ -254,7 +283,7 @@ export class DisplayConfigsManager {
                 this.#loadFavourites(),
             ]);
             this.#currentState = state;
-            this.#allConfigs = favourites;
+            this.#allConfigs = this.#processFavourites(favourites);
             this.#updateConfigsForState();
         } catch (e) {
             console.error("DisplayProfiles@realh: " +
@@ -264,6 +293,22 @@ export class DisplayConfigsManager {
             }
             this.#stateChangedCallback(e as Error);
         }
+    }
+
+    /**
+     * Adds the additional fields of DisplayConfig tht are absent from
+     * SavedDisplayConfig.
+     */
+    #processFavourites(favourites: SavedDisplayConfig[]): DisplayConfig[] {
+        return favourites.map((f) => {
+            return {
+                logicalMonitors: f.logicalMonitors,
+                layoutMode: f.layoutMode,
+                isCurrent: false,
+                isFavourite: true,
+                isCompatible: this.#currentState?.checkCompatibility(f) || false,
+            };
+        })
     }
 
     async #getInitialDBusState(): Promise<DisplayState> {
@@ -291,7 +336,7 @@ export class DisplayConfigsManager {
         }
     }
 
-    async #loadFavourites(): Promise<DisplayConfig[]> {
+    async #loadFavourites(): Promise<SavedDisplayConfig[]> {
         const file = DisplayConfigsManager.configFile;
         return new Promise((resolve, _reject) => {
             file.load_contents_async(null, (_obj, res) => {
@@ -308,10 +353,8 @@ export class DisplayConfigsManager {
                     }
                     const decoder = new TextDecoder();
                     const jsonStr = decoder.decode(contents);
-                    const favourites = JSON.parse(jsonStr) as DisplayConfig[];
-                    for (const fav of favourites) {
-                        fav.isFavourite = true;
-                    }
+                    const favourites = JSON.parse(jsonStr) as
+                        SavedDisplayConfig[];
                     resolve(favourites);
                 } catch (e) {
                     if (!(e instanceof GLib.Error) ||
@@ -408,12 +451,12 @@ export class DisplayConfigsManager {
                 c.isFavourite = true;
             }
             return c.isFavourite;
+        }).map((c) => {
+            return {
+                logicalMonitors: c.logicalMonitors,
+                layoutMode: c.layoutMode,
+            }
         });
-        for (const fav of favs) {
-            fav.isCurrent = undefined;
-            fav.isFavourite = undefined;
-            fav.isCompatible = undefined;
-        }
         const dir = DisplayConfigsManager.configDirectory;
         const file = DisplayConfigsManager.configFile;
         try {
