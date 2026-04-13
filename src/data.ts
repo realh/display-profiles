@@ -1,7 +1,6 @@
 import type {
     DisplayConfigStateTuple,
     LogicalMonitorStateTuple,
-    MonitorTransform,
     PhysicalMonitorStateTuple,
 } from "./tuples.js";
 
@@ -60,6 +59,7 @@ export interface LogicalMonitor {
     readonly y: number;
     readonly scale: number;
     readonly transform: string;
+    readonly primary: boolean;
     /** PhysicalMonitor.connector */
     readonly physicalMonitors: PhysicalMonitor[];
 }
@@ -209,6 +209,7 @@ export class DisplayState {
                     y: lm[1],
                     scale: lm[2],
                     transform: monitorTransformNames[i],
+                    primary: lm[4],
                     physicalMonitors: phys,
                 });
             }
@@ -396,6 +397,18 @@ export class DisplayConfigsManager {
             }
         } else if (!this.#identifyCurrentConfig(current)) {
             this.#allConfigs.unshift(current);
+        }
+        // Make sure the primary monitor is shown first in each config.
+        for (const config of this.#allConfigs) {
+            config.logicalMonitors.sort((a, b) => {
+                if (a.primary && !b.primary) {
+                    return -1;
+                }
+                if (!a.primary && b.primary) {
+                    return 1;
+                }
+                return 0;
+            });
         }
         this.#waiting = 0;
         this.#stateChangedCallback(this);
