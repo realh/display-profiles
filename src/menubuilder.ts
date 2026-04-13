@@ -4,12 +4,11 @@ import St from "gi://St";
 import { DisplayConfig } from "./data.js";
 import {
     PopupBaseMenuItem,
-    PopupMenuSection,
     PopupSeparatorMenuItem ,
 } from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 const SPACING = 8;
-const SPC_PX = `${SPACING}px`;
+// const SPC_PX = `${SPACING}px`;
 
 export class DisplayProfilesMenuBuilder {
     #log: (...args: any) => void;
@@ -96,21 +95,19 @@ export class DisplayProfilesMenuBuilder {
                      waiting: boolean, showTransforms: boolean,
                      showConnectors: boolean, showScales: boolean)
     {
-        let hboxStyle = `spacing: ${SPC_PX}; margin-bottom: ${SPC_PX};`;
         const numMonitors = config.logicalMonitors.reduce(
             (n, m) => m.physicalMonitors.length + n, 0);
         if (items.length > 0 && numMonitors > 1) {
             items.push(new PopupSeparatorMenuItem());
-        } else {
-            hboxStyle += ` margin-top: ${SPC_PX};`;
         }
         const hbox = new St.BoxLayout({
             // style_class: "dispprofs-config-row",
-            style: hboxStyle,
             reactive: !waiting,
             can_focus: config.isCompatible && !waiting,
             vertical: false,
             orientation: Clutter.Orientation.HORIZONTAL,
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
         });
 
         // Column 0: Radio button
