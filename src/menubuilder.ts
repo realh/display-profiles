@@ -8,8 +8,6 @@ import {
     PopupSeparatorMenuItem ,
 } from "resource:///org/gnome/shell/ui/popupMenu.js";
 
-type PopupMenuChild = PopupBaseMenuItem | PopupMenuSection;
-
 const SPACING = 8;
 const SPC_PX = `${SPACING}px`;
 
@@ -25,7 +23,7 @@ export class DisplayProfilesMenuBuilder {
 
     }
 
-    build(configs: DisplayConfig[], waiting: boolean): PopupMenuChild[] {
+    build(configs: DisplayConfig[], waiting: boolean): PopupBaseMenuItem[] {
         try {
             return this.#build(configs, waiting);
         } catch (e) {
@@ -34,13 +32,13 @@ export class DisplayProfilesMenuBuilder {
         }
     }
 
-    #build(configs: DisplayConfig[], waiting: boolean): PopupMenuChild[] {
+    #build(configs: DisplayConfig[], waiting: boolean): PopupBaseMenuItem[] {
         this.#log(`${configs.length} configs to show`);
         if (configs.length == 0) {
             return [];
         }
         // this.#log("Configs:\n" + JSON.stringify(configs, null, 2));
-        const items: PopupMenuChild[] = [];
+        const items: PopupBaseMenuItem[] = [];
 
         // Show compatible configs before incompatible ones (sort is stable)
         configs.sort((a, b) => {
@@ -94,7 +92,7 @@ export class DisplayProfilesMenuBuilder {
      *
      * @param first: True if this is the first config
      */
-    #addConfigToMenu(config: DisplayConfig, items: PopupMenuChild[],
+    #addConfigToMenu(config: DisplayConfig, items: PopupBaseMenuItem[],
                      waiting: boolean, showTransforms: boolean,
                      showConnectors: boolean, showScales: boolean)
     {
@@ -127,8 +125,6 @@ export class DisplayProfilesMenuBuilder {
         const grid = new St.Widget({
             // style_class: "dispprofs-monitor-col",
             layout_manager: layout,
-            reactive: !waiting,
-            can_focus: config.isCompatible && !waiting,
             x_expand: true,
             x_align: Clutter.ActorAlign.FILL,
         });
@@ -139,6 +135,7 @@ export class DisplayProfilesMenuBuilder {
                 can_focus: true,
                 x_expand: true,
                 x_align: Clutter.ActorAlign.FILL,
+                style_class: "popup-menu-item",
             });
             //button.connect("clicked", () => this._onApplyConfig(config, true));
             hbox.add_child(button);
@@ -203,9 +200,12 @@ export class DisplayProfilesMenuBuilder {
 
         // hbox needs to go in a PopupMenuSection so the buttons can handle
         // focus and clicks independently.
-        const itemSection = new PopupMenuSection();
-        itemSection.actor.add_child(hbox);
-        items.push(itemSection);
+        const item = new PopupBaseMenuItem();
+        // Remove the default "menu item" styling because each item contains
+        // a row of 3 pseudo-items.
+        item.remove_style_class_name('popup-menu-item');
+        item.actor.add_child(hbox);
+        items.push(item);
     }
 
     #makeRadioButton(config: DisplayConfig, waiting: boolean): St.Button {
@@ -222,6 +222,7 @@ export class DisplayProfilesMenuBuilder {
             reactive: config.isCompatible && !waiting,
             can_focus: config.isCompatible && !waiting,
             // style_class: "dispprofs-radio-button"
+            style_class: "popup-menu-item",
         });
         if (!config.isCompatible) {
             radioButton.opacity = 128;
@@ -243,6 +244,7 @@ export class DisplayProfilesMenuBuilder {
             can_focus: !waiting,
             // style_class: "dispprofs-star-button",
             x_expand: false,
+            style_class: "popup-menu-item",
         });
         button.connect('clicked', () => {
             config.isFavourite = !config.isFavourite;
