@@ -21,11 +21,13 @@ export class DisplayConfigProxy {
         this.#proxy = proxy;
     }
 
-    /**
-     * Connects to a signal on the proxy.
-     */
-    connect(signalName: string, callback: (...args: any[]) => void): number {
-        return this.#proxy.connect(signalName, callback);
+    connectMonitorsChanged(callback: () => void): number {
+        return this.#proxy.connect('g-signal',
+            (proxy, sender, signalName, parameters) => {
+                if (signalName === 'MonitorsChanged') {
+                    callback();
+                }
+            });
     }
 
     getCurrentStateAsync(): Promise<DisplayConfigStateTuple> {

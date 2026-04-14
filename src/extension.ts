@@ -105,6 +105,7 @@ export default class DisplayProfilesExtension extends Extension {
             // If there are no display modes at all (no favourites and we're
             // running in a window) keep the button disabled.
             if (configs.length == 0) {
+                this.#log("No configs");
                 disable = true;
                 if (uiIsOpen) {
                     menu.close();

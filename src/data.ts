@@ -109,6 +109,16 @@ export interface SavedDisplayConfig {
     readonly layoutMode: "logical" | "physical";
 }
 
+export function describeDisplayConfig(config: SavedDisplayConfig): string {
+    const lms = config.logicalMonitors.flatMap(lm => {
+        const scale = `${Math.floor(lm.scale * 100)}%`;
+        return lm.physicalMonitors.map(pm => {
+            return `${pm.connector}: ${pm.modeId} ${scale}`;
+        });
+    });
+    return JSON.stringify(lms, null, 2);
+}
+
 /**
  * DisplayConfig represents a single possible display configuration. id is
  * unique for each DisplayConfig. It helps identify a config when its favourite
@@ -270,6 +280,10 @@ export class DisplayState {
         }
         return true;
     }
+
+    describe(): string {
+        return describeDisplayConfig(this.getDisplayConfig());
+    }
 }
 
 export type DisplayStateChangedCallback =
@@ -283,6 +297,7 @@ export class DisplayConfigsManager {
     #stateChangedCallback: DisplayStateChangedCallback;
     // Used to give each DisplayConfig a unique ID
     #uniqueId: number = 0;
+    #log: (...args: any) => void;
 
     /**
      * 0 = not waiting,
@@ -303,6 +318,9 @@ export class DisplayConfigsManager {
     {
         this.#stateChangedCallback = stateChangedCallback;
         this.#debug = debug;
+        this.#log = debug ? (...args: any) =>
+                console.log("DP@realh:", ...args) :
+            () => {};
     }
 
     async init() {
@@ -343,7 +361,18 @@ export class DisplayConfigsManager {
 
     async #getInitialDBusState(): Promise<DisplayState> {
         this.#dbusProxy = await DisplayConfigProxy.getInstance();
-        // TODO: Connect signal handler
+        this.#dbusProxy.connectMonitorsChanged(() => {
+            this.#log("Got MonitorsChanged signal (waiting was " +
+                      `${this.#waiting})`);
+            if (this.#waiting != 0) {
+                this.#waiting = 2;
+            } else {
+                this.#waiting = 1;
+                // So that the controls can be disabled while waiting.
+                this.#stateChangedCallback(this);
+            }
+            this.#fetchState();
+        });
         return new DisplayState(await this.#dbusProxy.getCurrentStateAsync(),
                                 this.getUniqueId());
     }
@@ -355,6 +384,7 @@ export class DisplayConfigsManager {
             }
             const tuple = await this.#dbusProxy.getCurrentStateAsync();
             this.#currentState = new DisplayState(tuple, this.getUniqueId());
+            this.#log("Got current state:", this.#currentState.describe());
             this.#updateConfigsForState();
             return true;
         } catch (e) {
@@ -447,9 +477,9 @@ export class DisplayConfigsManager {
     }
 
     /**
-     * Finds the config in #allConfig that matches DisplayConfig. If there
-     * is a match its isCurrent field is set to true and its isFavourite field
-     * is copied to current.
+     * Finds the config in #favourites that matches `current`. If there is a
+     * match its isCurrent field is set to true, its id is changed to match
+     * `current` and its isFavourite field is copied to `current`.
      */
     #identifyCurrentConfig(current: DisplayConfig): boolean {
         current.logicalMonitors.sort((a, b) =>
@@ -481,6 +511,7 @@ export class DisplayConfigsManager {
                 continue;
             }
             current.isFavourite = config.isFavourite;
+            config.id = current.id;
             matched = true;
             // Keep iterating to make sure all non-current configs have
             // isCurrent = false.
@@ -489,7 +520,42 @@ export class DisplayConfigsManager {
     }
 
     getConfigs(): DisplayConfig[] {
-        return deepCopy(this.#favourites);
+        // After clicking stars, some of #favourites may have
+        // isFavourite = false. We should remove them at this point because
+        // this method is called when the UI is being refreshed.
+        const oldLen = this.#favourites.length;
+        this.#favourites = this.#favourites.filter((c) => {
+            return c.isFavourite || c.isFavourite;
+        });
+        const confs = this.#getConfigs(true);
+        this.#log(
+            `Removed ${oldLen - this.#favourites.length} unstarred ` +
+            `configs; now ${confs.length} including ` +
+          `${this.#currentState?.isFavourite ? "" : "un"}starred current`);
+        return confs;
+    }
+
+    /**
+     * Gets the list of configs for saving or showing in the UI. If
+     * `includeCurrent` is true, the current state is included in the list
+     * whether it's a favourite or not.
+     */
+    #getConfigs(includeCurrent: boolean):
+        DisplayConfig[]
+    {
+        const favs = deepCopy(this.#favourites);
+        // const s = this.#debug ?
+        //     `#getConfigs: ${favs.length} favourites, includeCurrent ` +
+        //           `was ${includeCurrent}` : "";
+        includeCurrent ||= this.#currentState?.isFavourite || false;
+        // this.#log(`${s}, now ${includeCurrent}`);
+        if (includeCurrent && !favs.some((c) => c.isCurrent)) {
+            const current = this.#currentState?.getDisplayConfig();
+            if (current) {
+                favs.unshift(current);
+            }
+        }
+        return favs;
     }
 
     /**
@@ -498,20 +564,15 @@ export class DisplayConfigsManager {
      * @returns false if it fails (never rejects).
      */
     async saveFavourites(alwaysSaveCurrent: boolean): Promise<boolean> {
-        // A favourite may have been "deleted" by clicking its star, so make
-        // sure it isn't saved any more.
-        this.#favourites = this.#favourites.filter((c) => {
-            if (c.isCurrent && alwaysSaveCurrent) {
-                c.isFavourite = true;
-            }
-            return c.isFavourite;
-        });
-        const favs = this.#favourites.map((c) => {
+        const oldLen = this.#favourites.length;
+        const favs = this.#getConfigs(alwaysSaveCurrent).map((c) => {
             return {
                 logicalMonitors: c.logicalMonitors,
                 layoutMode: c.layoutMode,
             }
         });
+        this.#log(`saveFavourites: Had ${oldLen} favourites, now have ` +
+                  `${favs.length}`);
         const dir = DisplayConfigsManager.configDirectory;
         const file = DisplayConfigsManager.configFile;
         try {
@@ -576,7 +637,12 @@ export class DisplayConfigsManager {
             monitorConfigs,
             props,
         ] as MonitorsConfigTuple;
-        this.#dbusProxy?.applyMonitorsConfigAsync(monsCfg);
+        this.#dbusProxy?.applyMonitorsConfigAsync(monsCfg).then(() => {
+            this.#log(`Applied config over dbus`);
+        }).catch((e) => {
+            console.error(
+                "DisplayProfiles@realh: Failed to apply config over dbus", e);
+        });
     }
 
     /**
@@ -585,15 +651,18 @@ export class DisplayConfigsManager {
     updateFavourite(config: DisplayConfig) {
         if (config.id === this.#currentState?.id) {
             this.#currentState.isFavourite = config.isFavourite;
-        } else {
-            for (const cfg of this.#favourites) {
-                if (cfg.id === config.id) {
-                    cfg.isFavourite = config.isFavourite;
-                    return;
-                }
+        }
+        for (const cfg of this.#favourites) {
+            if (cfg.id === config.id) {
+                cfg.isFavourite = config.isFavourite;
+                return;
             }
         }
-        this.saveFavourites(false);
+        this.saveFavourites(false).then((ok) => {
+            this.#log("Saved favourites: ok " + ok);
+        }).catch((e) => {
+            console.error("DisplayProfiles@realh: Error saving favourites:", e);
+        });
     }
 
     getUniqueId(): number {
