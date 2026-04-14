@@ -7,6 +7,15 @@ import {
     PopupSeparatorMenuItem ,
 } from "resource:///org/gnome/shell/ui/popupMenu.js";
 
+type ApplyConfigCallback = (config: DisplayConfig, closeMenu: boolean) => void;
+
+/**
+ * @param index The index of the config in the array passed to the buid method.
+ * @param favourite New state of the star icon.
+ * @param closeMenu Whether to close the menu after setting the favourite.
+ */
+type ToggleFavouriteCallback = ApplyConfigCallback;
+
 const SPACING = 8;
 // const SPC_PX = `${SPACING}px`;
 
@@ -15,15 +24,18 @@ export class DisplayProfilesMenuBuilder {
     #filledStarGIcon: Gio.ThemedIcon | null = null;
     #hollowStarGIcon: Gio.ThemedIcon | null = null;
     #onApplyConfig: (config: DisplayConfig, closeMenu: boolean) => void
+    #onToggleFavourite: ToggleFavouriteCallback;
 
     constructor(
-        onApplyConfig: (config: DisplayConfig, closeMenu: boolean) => void,
+        onApplyConfig: ApplyConfigCallback,
+        onToggleFavourite: ToggleFavouriteCallback,
         debug: boolean
     ) {
         this.#log = debug ? (...args: any) =>
                 console.log("DP@realh grid:", ...args) :
             () => {};
         this.#onApplyConfig = onApplyConfig
+        this.#onToggleFavourite = onToggleFavourite
     }
 
     build(configs: DisplayConfig[], waiting: boolean): PopupBaseMenuItem[] {
@@ -234,7 +246,9 @@ export class DisplayProfilesMenuBuilder {
         return radioButton;
     }
 
-    #makeStarButton(config: DisplayConfig, waiting: boolean): St.Button {
+    #makeStarButton(config: DisplayConfig, waiting: boolean):
+        St.Button
+    {
         const stIcon = new St.Icon({
             gicon: this.#getStarGIconForConfig(config),
             style_class: "popup-menu-icon"
@@ -247,11 +261,25 @@ export class DisplayProfilesMenuBuilder {
             x_expand: false,
             style_class: "popup-menu-item",
         });
-        button.connect('clicked', () => {
-            config.isFavourite = !config.isFavourite;
-            stIcon.set_gicon(this.#getStarGIconForConfig(config));
+        button.connect("clicked", () => {
+            this.#onStarButtonClicked(config, stIcon, true);
+        });
+        button.connect("button-release-event", (_actor, event) => {
+            if (event.get_button() == 3) {
+                this.#onStarButtonClicked(config, stIcon, false);
+                return true;
+            }
+            return false;
         });
         return button;
+    }
+
+    #onStarButtonClicked(config: DisplayConfig, icon: St.Icon,
+                         closeMenu: boolean)
+    {
+        config.isFavourite = !config.isFavourite;
+        icon.set_gicon(this.#getStarGIconForConfig(config));
+        this.#onToggleFavourite(config, closeMenu);
     }
 
     #getStarGIconForConfig(config: DisplayConfig) {

@@ -110,9 +110,13 @@ export interface SavedDisplayConfig {
 }
 
 /**
- * DisplayConfig represents a single possible display configuration.
+ * DisplayConfig represents a single possible display configuration. id is
+ * unique for each DisplayConfig. It helps identify a config when its favourite
+ * status is toggled in the UI - this is because the DisplayConfig[] passed to
+ * the UI is a deep copy of #allConfigs and/or #currentState.
  */
 export interface DisplayConfig extends SavedDisplayConfig {
+    id: number;
     isCurrent: boolean;
     isFavourite: boolean;
     isCompatible: boolean;
@@ -125,6 +129,11 @@ export class DisplayState {
     #serial: number;
     get serial(): number {
         return this.#serial;
+    }
+
+    #id: number;
+    get id(): number {
+        return this.#id;
     }
 
     #physicalMonitors: Map<string, PhysicalMonitorAndModes> = new Map();
@@ -140,8 +149,15 @@ export class DisplayState {
         return this.#supportsChangingLayoutMode;
     }
 
-    constructor(stateTuple: DisplayConfigStateTuple) {
+    isFavourite: boolean = false;
+
+    /**
+     * @param stateTuple Current state from DBus.
+     * @param id Unique id for the DisplayConfig.
+     */
+    constructor(stateTuple: DisplayConfigStateTuple, id: number) {
         this.#serial = stateTuple[0];
+        this.#id = id;
         this.#physicalMonitors = new Map();
         this.#logicalMonitors = [];
         this.#parsePhysicalMonitors(stateTuple[1]);
@@ -220,12 +236,17 @@ export class DisplayState {
         }
     }
 
+    /**
+     * Note the result has an id of 0. It should be changed to a unique value
+     * by the caller.
+     */
     getDisplayConfig(): DisplayConfig {
         return {
+            id: this.id,
             logicalMonitors: deepCopy(this.#logicalMonitors),
             layoutMode: this.layoutMode,
             isCurrent: true,
-            isFavourite: false,
+            isFavourite: this.isFavourite,
             isCompatible: true,
         };
     }
@@ -257,9 +278,11 @@ export type DisplayStateChangedCallback =
 export class DisplayConfigsManager {
     #dbusProxy: DisplayConfigProxy | null = null;
     #currentState: DisplayState | null = null;
-    #allConfigs: DisplayConfig[] = [];
+    #favourites: DisplayConfig[] = [];
     #debug: boolean;
     #stateChangedCallback: DisplayStateChangedCallback;
+    // Used to give each DisplayConfig a unique ID
+    #uniqueId: number = 0;
 
     /**
      * 0 = not waiting,
@@ -289,7 +312,7 @@ export class DisplayConfigsManager {
                 this.#loadFavourites(),
             ]);
             this.#currentState = state;
-            this.#allConfigs = this.#processFavourites(favourites);
+            this.#favourites = this.#processFavourites(favourites);
             this.#updateConfigsForState();
         } catch (e) {
             console.error("DisplayProfiles@realh: " +
@@ -302,12 +325,13 @@ export class DisplayConfigsManager {
     }
 
     /**
-     * Adds the additional fields of DisplayConfig tht are absent from
+     * Adds the additional fields of DisplayConfig that are absent from
      * SavedDisplayConfig.
      */
     #processFavourites(favourites: SavedDisplayConfig[]): DisplayConfig[] {
         return favourites.map((f) => {
             return {
+                id: this.getUniqueId(),
                 logicalMonitors: f.logicalMonitors,
                 layoutMode: f.layoutMode,
                 isCurrent: false,
@@ -320,7 +344,8 @@ export class DisplayConfigsManager {
     async #getInitialDBusState(): Promise<DisplayState> {
         this.#dbusProxy = await DisplayConfigProxy.getInstance();
         // TODO: Connect signal handler
-        return new DisplayState(await this.#dbusProxy.getCurrentStateAsync());
+        return new DisplayState(await this.#dbusProxy.getCurrentStateAsync(),
+                                this.getUniqueId());
     }
 
     async #fetchState(): Promise<boolean> {
@@ -329,7 +354,7 @@ export class DisplayConfigsManager {
                 throw new Error("DisplayProfiles@realh: No DBus proxy");
             }
             const tuple = await this.#dbusProxy.getCurrentStateAsync();
-            this.#currentState = new DisplayState(tuple);
+            this.#currentState = new DisplayState(tuple, this.getUniqueId());
             this.#updateConfigsForState();
             return true;
         } catch (e) {
@@ -397,14 +422,16 @@ export class DisplayConfigsManager {
             current.logicalMonitors.every(
                 (lm) => lm.physicalMonitors.length === 0))
         {
-            for (const config of this.#allConfigs) {
+            for (const config of this.#favourites) {
                 config.isCompatible = false;
             }
-        } else if (!this.#identifyCurrentConfig(current)) {
-            this.#allConfigs.unshift(current);
+        } else if (this.#identifyCurrentConfig(current)) {
+            this.#currentState.isFavourite = current.isFavourite;
+        } else {
+            this.#favourites.unshift(current);
         }
         // Make sure the primary monitor is shown first in each config.
-        for (const config of this.#allConfigs) {
+        for (const config of this.#favourites) {
             config.logicalMonitors.sort((a, b) => {
                 if (a.primary && !b.primary) {
                     return -1;
@@ -419,11 +446,16 @@ export class DisplayConfigsManager {
         this.#stateChangedCallback(this);
     }
 
+    /**
+     * Finds the config in #allConfig that matches DisplayConfig. If there
+     * is a match its isCurrent field is set to true and its isFavourite field
+     * is copied to current.
+     */
     #identifyCurrentConfig(current: DisplayConfig): boolean {
         current.logicalMonitors.sort((a, b) =>
                                      compareLogicalMonitors(a, b));
-        let matched = false;
-        for (const config of this.#allConfigs) {
+        let matched: boolean = false;
+        for (const config of this.#favourites) {
             if (config.logicalMonitors.length !==
                 current.logicalMonitors.length)
             {
@@ -450,12 +482,14 @@ export class DisplayConfigsManager {
             }
             current.isFavourite = config.isFavourite;
             matched = true;
+            // Keep iterating to make sure all non-current configs have
+            // isCurrent = false.
         }
         return matched;
     }
 
     getConfigs(): DisplayConfig[] {
-        return deepCopy(this.#allConfigs);
+        return deepCopy(this.#favourites);
     }
 
     /**
@@ -464,12 +498,15 @@ export class DisplayConfigsManager {
      * @returns false if it fails (never rejects).
      */
     async saveFavourites(alwaysSaveCurrent: boolean): Promise<boolean> {
-        const favs = this.#allConfigs.filter((c) => {
+        // A favourite may have been "deleted" by clicking its star, so make
+        // sure it isn't saved any more.
+        this.#favourites = this.#favourites.filter((c) => {
             if (c.isCurrent && alwaysSaveCurrent) {
                 c.isFavourite = true;
             }
             return c.isFavourite;
-        }).map((c) => {
+        });
+        const favs = this.#favourites.map((c) => {
             return {
                 logicalMonitors: c.logicalMonitors,
                 layoutMode: c.layoutMode,
@@ -540,6 +577,27 @@ export class DisplayConfigsManager {
             props,
         ] as MonitorsConfigTuple;
         this.#dbusProxy?.applyMonitorsConfigAsync(monsCfg);
+    }
+
+    /**
+     * Updates the favourite status of a config and saves favourites.
+     */
+    updateFavourite(config: DisplayConfig) {
+        if (config.id === this.#currentState?.id) {
+            this.#currentState.isFavourite = config.isFavourite;
+        } else {
+            for (const cfg of this.#favourites) {
+                if (cfg.id === config.id) {
+                    cfg.isFavourite = config.isFavourite;
+                    return;
+                }
+            }
+        }
+        this.saveFavourites(false);
+    }
+
+    getUniqueId(): number {
+        return ++this.#uniqueId;
     }
 
     static DISPLAY_PROFILES_ID = "display-profiles@realh";

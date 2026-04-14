@@ -30,6 +30,12 @@ export default class DisplayProfilesExtension extends Extension {
                 this.#menu?.close();
             }
         },
+        (config, closeMenu) => {
+            this.#manager?.updateFavourite(config);
+            if (closeMenu && this.#menu?.isOpen) {
+                this.#menu?.close();
+            }
+        },
         debug);
     #log: (...args: any) => void
 
