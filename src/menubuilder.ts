@@ -66,7 +66,7 @@ export class DisplayProfilesMenuBuilder {
                 return m.transform !== "none";
             });
         });
-        this.#log(`${showTransforms ? "Not showing" : "showing"} transforms`);
+        this.#log(`${showTransforms ? "Showing" : "Not showing"} transforms`);
 
         // Only show connectors if more than one is referenced
         const firstConnector =
@@ -84,7 +84,7 @@ export class DisplayProfilesMenuBuilder {
             }
             return false;
         });
-        this.#log(`${showConnectors ? "Not showing" : "showing"} connectors`);
+        this.#log(`${showConnectors ? "Showing" : "Not showing"} connectors`);
 
         // Only show scales if any are != 100%
         const showScales = configs.some(c => {
@@ -92,7 +92,7 @@ export class DisplayProfilesMenuBuilder {
                 return m.scale != 1.0;
             });
         });
-        this.#log(`${showScales ? "Not showing" : "showing"} scales`);
+        this.#log(`${showScales ? "Showing" : "Not showing"} scales`);
 
         for (const cfg of configs) {
             this.#addConfigToMenu(cfg, items, waiting,
