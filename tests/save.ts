@@ -16,7 +16,7 @@ async function saveFavourites(mgr: DisplayConfigsManager | Error) {
         );
         return;
     }
-    console.log("DisplayConfigsManager ready");
+    console.log("DisplayConfigsManager ready; saving");
     try {
         const configs = mgr.getConfigs();
         console.log("Configs:\n" + JSON.stringify(configs, null, 2));
@@ -30,7 +30,11 @@ async function saveFavourites(mgr: DisplayConfigsManager | Error) {
 
 async function start() {
     try {
-        new DisplayConfigsManager((mgr) => { saveFavourites(mgr); }, true);
+        const mgr = new DisplayConfigsManager(
+            (mgr) => { saveFavourites(mgr); },
+            true);
+        await mgr.init();
+        console.log("DisplayConfigsManager initialisation complete");
     } catch (e) {
         console.error(e);
         mainLoop.quit();
