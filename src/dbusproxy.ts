@@ -1,7 +1,6 @@
 import Gio from "gi://Gio";
-import GLib from "gi://GLib";
 
-import type { DisplayConfigStateTuple, MonitorsConfigTuple } from "./tuples.js";
+import { monitorsConfigTupleToVariant, type DisplayConfigStateTuple, type MonitorsConfigTuple } from "./tuples.js";
 import { unpackVariant } from "./variant.js";
 
 /**
@@ -23,11 +22,15 @@ export class DisplayConfigProxy {
 
     connectMonitorsChanged(callback: () => void): number {
         return this.#proxy.connect('g-signal',
-            (proxy, sender, signalName, parameters) => {
+            (_proxy, _sender, signalName, _parameters) => {
                 if (signalName === 'MonitorsChanged') {
                     callback();
                 }
             });
+    }
+
+    disconnectMonitorsChanged(id: number): void {
+        this.#proxy.disconnect(id);
     }
 
     getCurrentStateAsync(): Promise<DisplayConfigStateTuple> {
@@ -53,23 +56,34 @@ export class DisplayConfigProxy {
 
     applyMonitorsConfigAsync(config: MonitorsConfigTuple): Promise<void> {
         return new Promise((resolve, reject) => {
-            const variant = new GLib.Variant('(uua(iiduba(ssa{sv}))a{sv})',
-                config);
-            this.#proxy.call(
-                "ApplyMonitorsConfig",
-                variant,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                null,
-                (_, res) => {
-                    try {
-                        this.#proxy.call_finish(res);
-                        resolve();
-                    } catch (e) {
-                        reject(e);
+            if (!config) {
+                reject(new Error("DisplayProfiles@realh: MonitorsConfigTuple " +
+                             `is ${config}`));
+                return;
+            }
+            try {
+                const variant = monitorsConfigTupleToVariant(config);
+                this.#proxy.call(
+                    "ApplyMonitorsConfig",
+                    variant,
+                    Gio.DBusCallFlags.NONE,
+                    -1,
+                    null,
+                    (_, res) => {
+                        try {
+                            this.#proxy.call_finish(res);
+                            resolve();
+                        } catch (e) {
+                            reject(e);
+                        }
                     }
-                }
-            );
+                );
+            } catch (e) {
+                console.error("DisplayProfiles@realh: Failed to convert " +
+                              "tuple to variant:", e);
+                resolve();
+                return;
+            }
         });
     }
 

@@ -44,11 +44,13 @@ export default class DisplayProfilesExtension extends Extension {
         this.#log = debug ? (...args: any) =>
                 console.log("DP@realh:", ...args) :
             () => {};
+        this.#log("Created DisplayProfiles extension");
     }
 
     override enable() {
-        this.#log("DisplayProfiles extension enabled");
+        this.#log("Enabling DisplayProfiles extension");
         this.#manager.init();
+        this.#log("Manager initialised");
         this.#indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
         this.#icon = new St.Icon({
             gicon: new Gio.ThemedIcon({ name: 'video-display-symbolic' }),
@@ -78,13 +80,13 @@ export default class DisplayProfilesExtension extends Extension {
         Main.panel.addToStatusArea(this.uuid, this.#indicator);
 
         this.onDisplayStateChanged();
+        this.#log("DisplayProfiles extension enabled");
     }
 
     override disable() {
-        if (this.#indicator) {
-            this.#indicator.destroy();
-            this.#indicator = null;
-        }
+        this.#manager.disable();
+        this.#indicator?.destroy();
+        this.#indicator = null;
     }
 
     onDisplayStateChanged() {

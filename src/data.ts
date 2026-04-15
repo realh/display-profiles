@@ -1,7 +1,11 @@
 import type {
     DisplayConfigStateTuple,
+    LogicalMonitorConfigTuple,
     LogicalMonitorStateTuple,
+    MonitorsConfigProperties,
     MonitorsConfigTuple,
+    MonitorTransform,
+    PhysicalMonitorConfigTuple,
     PhysicalMonitorStateTuple,
 } from "./tuples.js";
 
@@ -298,6 +302,7 @@ export class DisplayConfigsManager {
     // Used to give each DisplayConfig a unique ID
     #uniqueId: number = 0;
     #log: (...args: any) => void;
+    #signalConnectionId: number | null = null;
 
     /**
      * 0 = not waiting,
@@ -321,9 +326,11 @@ export class DisplayConfigsManager {
         this.#log = debug ? (...args: any) =>
                 console.log("DP@realh:", ...args) :
             () => {};
+        this.#log("Created DisplayConfigsManager");
     }
 
     async init() {
+        this.#log("Initialising DisplayConfigsManager");
         try {
             const [state, favourites] = await Promise.all([
                 this.#getInitialDBusState(),
@@ -339,6 +346,14 @@ export class DisplayConfigsManager {
                 e = new Error(`${e}`);
             }
             this.#stateChangedCallback(e as Error);
+        }
+    }
+
+    disable() {
+        if (this.#signalConnectionId !== null) {
+            this.#dbusProxy?.disconnectMonitorsChanged(
+                this.#signalConnectionId);
+            this.#signalConnectionId = null;
         }
     }
 
@@ -361,18 +376,19 @@ export class DisplayConfigsManager {
 
     async #getInitialDBusState(): Promise<DisplayState> {
         this.#dbusProxy = await DisplayConfigProxy.getInstance();
-        this.#dbusProxy.connectMonitorsChanged(() => {
-            this.#log("Got MonitorsChanged signal (waiting was " +
-                      `${this.#waiting})`);
-            if (this.#waiting != 0) {
-                this.#waiting = 2;
-            } else {
-                this.#waiting = 1;
-                // So that the controls can be disabled while waiting.
-                this.#stateChangedCallback(this);
-            }
-            this.#fetchState();
-        });
+        this.#signalConnectionId =
+            this.#dbusProxy.connectMonitorsChanged(() => {
+                this.#log("Got MonitorsChanged signal (waiting was " +
+                          `${this.#waiting})`);
+                if (this.#waiting != 0) {
+                    this.#waiting = 2;
+                } else {
+                    this.#waiting = 1;
+                    // So that the controls can be disabled while waiting.
+                    this.#stateChangedCallback(this);
+                }
+                this.#fetchState();
+            });
         return new DisplayState(await this.#dbusProxy.getCurrentStateAsync(),
                                 this.getUniqueId());
     }
@@ -616,27 +632,36 @@ export class DisplayConfigsManager {
     }
 
     applyConfig(config: DisplayConfig) {
-        const props = {
+        const props: MonitorsConfigProperties = {
             "layout-mode": config.layoutMode == "physical" ? 2 : 1
         };
-        const monitorConfigs = config.logicalMonitors.map(lm => {
-            const pmConfigs = lm.physicalMonitors.map(pm => {
-                return [
-                    pm.connector,
-                    pm.modeId,
-                    { underscanning: pm.underscanning },
-                ];
+        const monitorConfigs: LogicalMonitorConfigTuple[] =
+            config.logicalMonitors.map(lm => {
+                const pmConfigs: PhysicalMonitorConfigTuple[] =
+                    lm.physicalMonitors.map(pm => {
+                        return [
+                            pm.connector,
+                            pm.modeId,
+                            { underscanning: pm.underscanning },
+                        ];
+                    });
+                let transform = Math.max(
+                    monitorTransformNames.indexOf(lm.transform),
+                    0) as MonitorTransform;
+                    return [ lm.x, lm.y, lm.scale, transform,
+                        lm.primary, pmConfigs ];
             });
-            let transform = Math.max(
-                monitorTransformNames.indexOf(lm.transform), 0);
-            return [ lm.x, lm.y, lm.scale, transform, lm.primary, pmConfigs ];
-        });
-        const monsCfg = [
+        const monsCfg: MonitorsConfigTuple = [
             this.currentSerial,
             1,  // 1 = apply temporarily
             monitorConfigs,
             props,
-        ] as MonitorsConfigTuple;
+        ];
+        if (!monsCfg) {
+            console.error("DisplayProfiles@realh: MonitorsConfigTuple is " +
+                         `${monsCfg}`);
+            return;
+        }
         this.#dbusProxy?.applyMonitorsConfigAsync(monsCfg).then(() => {
             this.#log(`Applied config over dbus`);
         }).catch((e) => {
