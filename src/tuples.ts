@@ -19,7 +19,7 @@ export function primitiveToVariant(
                 varType = numType || "d";
                 break;
             case "boolean":
-                varType = "d";
+                varType = "b";
                 break;
             default:
                 throw new Error(
@@ -32,24 +32,62 @@ export function primitiveToVariant(
 export function packVariantsInArray(signature: string, members: GLib.Variant[]):
     GLib.Variant
 {
-    return GLib.Variant.new_array(GLib.VariantType.new(signature), members);
+    for (let i = 0; i < members.length; i++) {
+        const m = members[i];
+        if (!(m instanceof GLib.Variant)) {
+            throw new Error("packVariantsInArray: Expected GLib.Variant in " +
+                            `array of '${signature}', got ${m} @ ${i}`);
+        }
+    }
+    try {
+        return GLib.Variant.new_array(GLib.VariantType.new(signature), members);
+    } catch (e) {
+        console.error("packVariantsInArray:", e);
+        throw(e);
+    }
 }
 
 export function packVariantsInTuple(members: GLib.Variant[]): GLib.Variant {
-    return GLib.Variant.new_tuple(members);
+    for (let i = 0; i < members.length; i++) {
+        const m = members[i];
+        if (!(m instanceof GLib.Variant)) {
+            throw new Error("packVariantsInTuple: Expected GLib.Variant in " +
+                            `tuple, got ${m} @ ${i}`);
+        }
+    }
+    try {
+        return GLib.Variant.new_tuple(members);
+    } catch (e) {
+        console.error("packVariantsInTuple:", e);
+        throw(e);
+    }
 }
 
 export function propertiesToVariant(
     a: Properties, numType?: string, varType?: string): GLib.Variant
 {
-    const entries: GLib.Variant[] = Object.entries(a).filter(
-        ([_k, v]) => v !== undefined
-    ).map(([k, v]) => {
-        const key = GLib.Variant.new("s", k);
-        const value = primitiveToVariant(v, numType, varType);
-        return GLib.Variant.new_dict_entry(key, value);
-    });
-    return packVariantsInArray("{sv}", entries);
+    let entries: GLib.Variant[]
+    try {
+        entries = Object.entries(a).filter(
+            ([_k, v]) => v !== undefined
+        ).map(([k, v]) => {
+            const key = GLib.Variant.new("s", k);
+            const value = primitiveToVariant(v, numType, varType);
+            // We need to pack the variant inside another variant to match
+            // the signature {sv}.
+            const variant = GLib.Variant.new("v", value);
+            return GLib.Variant.new_dict_entry(key, variant);
+        });
+    } catch (e) {
+        console.error("propertiesToVariant: error converting entries:", e);
+        throw(e);
+    }
+    try {
+        return packVariantsInArray("{sv}", entries);
+    } catch (e) {
+        console.error("propertiesToVariant: packing error:", e);
+        throw(e);
+    }
 }
 
 /** Names are defined in data.ts */
@@ -93,8 +131,22 @@ export type LogicalMonitorConfigTuple = [
 export function logicalMonitorConfigTupleToVariant(
     tuple: LogicalMonitorConfigTuple
 ): GLib.Variant {
-    const phys = tuple[5].map(physicalMonitorConfigTupleToVariant);
-    const physVariant = packVariantsInArray("(ssa{sv})", phys);
+    let phys: GLib.Variant[]
+    let physVariant: GLib.Variant
+    try {
+        phys = tuple[5].map(physicalMonitorConfigTupleToVariant);
+    } catch (e) {
+        console.error("logicalMonitorConfigTupleToVariant: error converting " +
+            "physical monitor entries:", e);
+        throw(e);
+    }
+    try {
+        physVariant = packVariantsInArray("(ssa{sv})", phys);
+    } catch (e) {
+        console.error("logicalMonitorConfigTupleToVariant: error packing " +
+            "physical monitor array:", e);
+        throw(e);
+    }
     return packVariantsInTuple(
         [
             primitiveToVariant(tuple[0], 'i'),
@@ -125,9 +177,43 @@ export type MonitorsConfigTuple = [
 export function monitorsConfigTupleToVariant(tuple: MonitorsConfigTuple):
     GLib.Variant
 {
-    const props = propertiesToVariant(tuple[3], 'u');
-    const mons = tuple[2].map(logicalMonitorConfigTupleToVariant);
-    const monsVariant = packVariantsInArray("(iiduba(ssa{sv}))", mons);
+    let props: GLib.Variant
+    let mons: GLib.Variant[];
+    let monsVariant: GLib.Variant
+    try {
+        props = propertiesToVariant(tuple[3], 'u');
+    } catch (e) {
+        console.error("monitorsConfigTupleToVariant: error converting " +
+            "properties:", e);
+        throw(e);
+    }
+    if (!(props instanceof GLib.Variant)) {
+        throw new Error("monitorsConfigTupleToVariant: converted props is " +
+            `${props} instead of GVariant; source:\n` +
+            JSON.stringify(tuple[3], null, 2));
+    }
+    try {
+        mons = tuple[2].map(logicalMonitorConfigTupleToVariant);
+    } catch (e) {
+        console.error("monitorsConfigTupleToVariant: error converting " +
+            "logical monitor entries:", e);
+        throw(e);
+    }
+    console.log(
+        "monitorsConfigTupleToVariant: logical monitors tuple input:\n" +
+        JSON.stringify(tuple, null, 2) + "\nAs variants:\n" +
+        mons.map((m) => "  " + m.print(true)).join("\n"));
+    try {
+        monsVariant = packVariantsInArray("(iiduba(ssa{sv}))", mons);
+    } catch (e) {
+        console.error("monitorsConfigTupleToVariant: error packing " +
+            "logical monitor array:", e);
+        throw(e);
+    }
+    if (!(monsVariant instanceof GLib.Variant)) {
+        throw new Error("monitorsConfigTupleToVariant: logical monitor array " +
+                        `is ${monsVariant} instead of GLib.Variant`);
+    }
     return packVariantsInTuple(
         [
             primitiveToVariant(tuple[0], 'u'),
