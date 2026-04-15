@@ -20,15 +20,15 @@ async function reapplyCurrent(mgr: DisplayConfigsManager | Error) {
     try {
         const configs = mgr.getConfigs();
         console.log("Configs:\n" + JSON.stringify(configs, null, 2));
-        let current = configs.find((c) => c.isCurrent);
-        if (!current) {
-            console.warn("No display config matches current");
-            current = configs[0];
-            if (!current) {
+        let notCurrent = configs.find((c) => !c.isCurrent);
+        if (!notCurrent) {
+            console.log("Only current display config is available");
+            notCurrent = configs[0];
+            if (!notCurrent) {
                 throw new Error("No display configs found");
             }
         }
-        await mgr.applyConfig(current);
+        await mgr.applyConfig(notCurrent);
     } catch (e) {
         console.error(e);
     }
