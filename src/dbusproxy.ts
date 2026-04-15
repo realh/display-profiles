@@ -54,7 +54,9 @@ export class DisplayConfigProxy {
         });
     }
 
-    applyMonitorsConfigAsync(config: MonitorsConfigTuple): Promise<void> {
+    applyMonitorsConfigAsync(config: MonitorsConfigTuple, debug: boolean):
+        Promise<void>
+    {
         return new Promise((resolve, reject) => {
             if (!config) {
                 reject(new Error("DisplayProfiles@realh: MonitorsConfigTuple " +
@@ -63,6 +65,10 @@ export class DisplayConfigProxy {
             }
             try {
                 const variant = monitorsConfigTupleToVariant(config);
+                if (debug) {
+                    console.log("DP@realh: Applying config:",
+                                variant.print(true));
+                }
                 this.#proxy.call(
                     "ApplyMonitorsConfig",
                     variant,

@@ -631,7 +631,7 @@ export class DisplayConfigsManager {
         }
     }
 
-    applyConfig(config: DisplayConfig) {
+    async applyConfig(config: DisplayConfig) {
         const props: MonitorsConfigProperties = {
             "layout-mode": config.layoutMode == "physical" ? 2 : 1
         };
@@ -662,12 +662,14 @@ export class DisplayConfigsManager {
                          `${monsCfg}`);
             return;
         }
-        this.#dbusProxy?.applyMonitorsConfigAsync(monsCfg).then(() => {
+        try {
+            await this.#dbusProxy?.applyMonitorsConfigAsync(monsCfg,
+                                                            this.#debug);
             this.#log(`Applied config over dbus`);
-        }).catch((e) => {
+        } catch(e) {
             console.error(
                 "DisplayProfiles@realh: Failed to apply config over dbus", e);
-        });
+        }
     }
 
     /**

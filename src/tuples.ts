@@ -42,7 +42,9 @@ export function packVariantsInTuple(members: GLib.Variant[]): GLib.Variant {
 export function propertiesToVariant(
     a: Properties, numType?: string, varType?: string): GLib.Variant
 {
-    const entries: GLib.Variant[] = Object.entries(a).map(([k, v]) => {
+    const entries: GLib.Variant[] = Object.entries(a).filter(
+        ([_k, v]) => v !== undefined
+    ).map(([k, v]) => {
         const key = GLib.Variant.new("s", k);
         const value = primitiveToVariant(v, numType, varType);
         return GLib.Variant.new_dict_entry(key, value);

@@ -7,7 +7,8 @@
     "build": "tsc",
     "test": "tsc && gjs -m ./dist/tests/showstate.js",
     "test1": "tsc && gjs -m ./dist/tests/showstate.js",
-    "test2": "tsc && gjs -m ./dist/tests/save.js"
+    "test2": "tsc && gjs -m ./dist/tests/save.js",
+    "test3": "tsc && gjs -m ./dist/tests/apply.js"
   },
   "keywords": [
     "gnome-shell",
