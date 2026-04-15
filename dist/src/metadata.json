@@ -2,9 +2,7 @@
   "uuid": "display-profiles@realh",
   "name": "Display Profiles",
   "description": "A GNOME Shell extension for quick display configuration switching",
-  "shell-version": [
-    "49"
-  ],
+  "shell-version": [ "49", "50" ],
   "gettext-domain": "display-profiles",
   "version": 1
 }
