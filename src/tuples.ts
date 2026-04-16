@@ -4,7 +4,6 @@
 
 import GLib from "gi://GLib?version=2.0";
 
-
 export type Properties = Record<string, any>;
 
 export function primitiveToVariant(

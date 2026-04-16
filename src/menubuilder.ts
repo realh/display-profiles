@@ -32,7 +32,7 @@ export class DisplayProfilesMenuBuilder {
         debug: boolean
     ) {
         this.#log = debug ? (...args: any) =>
-                console.log("DP@realh grid:", ...args) :
+                console.log("DP@realh UI:", ...args) :
             () => {};
         this.#onApplyConfig = onApplyConfig
         this.#onToggleFavourite = onToggleFavourite
@@ -182,6 +182,9 @@ export class DisplayProfilesMenuBuilder {
                         pm.preferredMode == pm.modeId
                     ),
                     col++, i, 1, 1);
+                this.#log(
+                    `Actual ${pm.modeId} vs preferred ${pm.preferredMode}: ` +
+                    `${pm.preferredMode == pm.modeId}`);
                 if (i == 0 && showScales) {
                     layout.attach(
                         this.#makeLabel(
@@ -193,6 +196,9 @@ export class DisplayProfilesMenuBuilder {
                         col++, i, 1, 1
                     );
                 }
+                this.#log(`${pm.modeId}: actual scale ${lm.scale} vs ` +
+                         `preferred ${pm.preferredScale}: ` +
+                         `${pm.preferredScale == lm.scale}`);
                 if (i == 0 && showTransforms) {
                     layout.attach(
                         this.#makeLabel(

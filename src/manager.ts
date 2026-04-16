@@ -1,12 +1,18 @@
-import Gio from "@girs/gio-2.0";
-import GLib from "@girs/glib-2.0";
+import Gio from "gi://Gio";
+import GLib from "gi://GLib";
 import {
     compareLogicalMonitors,
     deepCopy,
+    describeDisplayConfig,
     DisplayConfig,
     DisplayState,
+    LogicalMonitor,
     monitorTransformNames,
+    PhysicalMonitor,
+    pruneDisplayConfig,
     SavedDisplayConfig,
+    SavedLogicalMonitor,
+    SavedPhysicalMonitor,
 } from "./data.js";
 import { DisplayConfigProxy } from "./dbusproxy.js";
 import { mkdirWithParentsAsync } from "./mkdirs.js";
@@ -83,19 +89,51 @@ export class DisplayConfigsManager {
 
     /**
      * Adds the additional fields of DisplayConfig that are absent from
-     * SavedDisplayConfig.
+     * SavedDisplayConfig. Placeholders are used; correct values will be
+     * set by #updateConfigsForState.
      */
     #processFavourites(favourites: SavedDisplayConfig[]): DisplayConfig[] {
         return favourites.map((f) => {
             return {
                 id: this.getUniqueId(),
-                logicalMonitors: f.logicalMonitors,
+                logicalMonitors: this.#processLogicalMonitors(
+                    f.logicalMonitors),
                 layoutMode: f.layoutMode,
                 isCurrent: false,
                 isFavourite: true,
-                isCompatible: this.#currentState?.checkCompatibility(f) || false,
+                isCompatible: true,
             };
         });
+    }
+
+    #processLogicalMonitors(logicalMonitors: SavedLogicalMonitor[]):
+        LogicalMonitor[]
+    {
+        return logicalMonitors.map((lm) => {
+            return {
+                x: lm.x,
+                y: lm.y,
+                scale: lm.scale,
+                transform: lm.transform,
+                primary: lm.primary,
+                physicalMonitors: this.#processPhysicalMonitors(
+                    lm.physicalMonitors),
+            };
+        })
+    }
+
+    #processPhysicalMonitors(physicalMonitors: SavedPhysicalMonitor[]):
+        PhysicalMonitor[]
+    {
+        return physicalMonitors.map((pm) => {
+            return {
+                connector: pm.connector,
+                modeId: pm.modeId,
+                underscanning: pm.underscanning,
+                preferredMode: "",
+                preferredScale: 1,
+            };
+        })
     }
 
     async #getInitialDBusState(): Promise<DisplayState> {
@@ -114,7 +152,7 @@ export class DisplayConfigsManager {
                 this.#fetchState();
             });
         return new DisplayState(await this.#dbusProxy.getCurrentStateAsync(),
-            this.getUniqueId());
+            this.getUniqueId(), this.#debug);
     }
 
     async #fetchState(): Promise<boolean> {
@@ -123,8 +161,8 @@ export class DisplayConfigsManager {
                 throw new Error("DisplayProfiles@realh: No DBus proxy");
             }
             const tuple = await this.#dbusProxy.getCurrentStateAsync();
-            this.#currentState = new DisplayState(tuple, this.getUniqueId());
-            this.#log("Got current state:", this.#currentState.describe());
+            this.#currentState = new DisplayState(
+                tuple, this.getUniqueId(), this.#debug);
             this.#updateConfigsForState();
             return true;
         } catch (e) {
@@ -172,16 +210,18 @@ export class DisplayConfigsManager {
     }
 
     #updateConfigsForState() {
-        if (this.#waiting !== 0) {
+        if (this.#waiting == 2) {
             console.log("DisplayProfiles@realh: Refetching state from DBus");
             this.#waiting = 1;
             this.#fetchState();
+            return;
         }
         if (!this.#currentState) {
             const e = new Error("DisplayProfiles@realh: Missing current state");
             this.#stateChangedCallback(e);
             return;
         }
+        this.#log("Updating configs for state:", this.#currentState.describe());
         const current = this.#currentState.getDisplayConfig();
 
         // current may have no monitors if we're running nested or something
@@ -197,8 +237,8 @@ export class DisplayConfigsManager {
         } else {
             this.#favourites.unshift(current);
         }
-        // Make sure the primary monitor is shown first in each config.
         for (const config of this.#favourites) {
+            // Make sure the primary monitor is shown first in each config.
             config.logicalMonitors.sort((a, b) => {
                 if (a.primary && !b.primary) {
                     return -1;
@@ -208,6 +248,30 @@ export class DisplayConfigsManager {
                 }
                 return 0;
             });
+            config.isCompatible =
+                this.#currentState?.checkCompatibility(config) || false;
+            if (config.isCompatible) {
+                // Fix preferred* fields in physical monitors.
+                for (const lm of config.logicalMonitors) {
+                    for (let i = 0; i < lm.physicalMonitors.length; i++) {
+                        const favPm = lm.physicalMonitors[i];
+                        const statePm = this.#currentState.physicalMonitors.get(
+                            favPm.connector);
+                        if (statePm) {
+                            // Compatibility has already been checked.
+                            favPm.preferredMode = statePm.preferredMode;
+                            favPm.preferredScale = statePm.preferredScale;
+                        } else {
+                            // ...so this shouldn't happen
+                            config.isCompatible = false;
+                            console.error("Favourite " +
+                                `${describeDisplayConfig(config)} was ` +
+                                "erroneously marked compatible with state " +
+                                this.#currentState.describe());
+                        }
+                    }
+                }
+            }
         }
         this.#waiting = 0;
         this.#stateChangedCallback(this);
@@ -219,7 +283,7 @@ export class DisplayConfigsManager {
      * `current` and its isFavourite field is copied to `current`.
      */
     #identifyCurrentConfig(current: DisplayConfig): boolean {
-        current.logicalMonitors.sort((a, b) => compareLogicalMonitors(a, b));
+        current.logicalMonitors.sort(compareLogicalMonitors);
         let matched: boolean = false;
         for (const config of this.#favourites) {
             if (config.logicalMonitors.length !==
@@ -232,7 +296,7 @@ export class DisplayConfigsManager {
                 continue;
             }
             config.isCurrent = true;
-            config.logicalMonitors.sort((a, b) => compareLogicalMonitors(a, b));
+            config.logicalMonitors.sort(compareLogicalMonitors);
             for (let i = 0; i < config.logicalMonitors.length; i++) {
                 const lm1 = config.logicalMonitors[i];
                 const lm2 = current.logicalMonitors[i];
@@ -297,12 +361,8 @@ export class DisplayConfigsManager {
      */
     async saveFavourites(alwaysSaveCurrent: boolean): Promise<boolean> {
         const oldLen = this.#favourites.length;
-        const favs = this.#getConfigs(alwaysSaveCurrent).map((c) => {
-            return {
-                logicalMonitors: c.logicalMonitors,
-                layoutMode: c.layoutMode,
-            };
-        });
+        const favs = this.#getConfigs(alwaysSaveCurrent).map(
+            pruneDisplayConfig);
         this.#log(`saveFavourites: Had ${oldLen} favourites, now have ` +
             `${favs.length}`);
         const dir = DisplayConfigsManager.configDirectory;
@@ -351,20 +411,21 @@ export class DisplayConfigsManager {
         const props: MonitorsConfigProperties = {
             "layout-mode": config.layoutMode == "physical" ? 2 : 1
         };
-        const monitorConfigs: LogicalMonitorConfigTuple[] = config.logicalMonitors.map(lm => {
-            const pmConfigs: PhysicalMonitorConfigTuple[] = lm.physicalMonitors.map(pm => {
-                return [
-                    pm.connector,
-                    pm.modeId,
-                    { underscanning: pm.underscanning },
-                ];
+        const monitorConfigs: LogicalMonitorConfigTuple[] =
+            config.logicalMonitors.map(lm => {
+                const pmConfigs: PhysicalMonitorConfigTuple[] =
+                    lm.physicalMonitors.map(pm => {
+                        return [
+                            pm.connector,
+                            pm.modeId,
+                            { underscanning: pm.underscanning },
+                        ];
+                    });
+                let transform = Math.max(
+                    monitorTransformNames.indexOf(lm.transform),
+                    0) as MonitorTransform;
+                return [lm.x, lm.y, lm.scale, transform, lm.primary, pmConfigs];
             });
-            let transform = Math.max(
-                monitorTransformNames.indexOf(lm.transform),
-                0) as MonitorTransform;
-            return [lm.x, lm.y, lm.scale, transform,
-            lm.primary, pmConfigs];
-        });
         const monsCfg: MonitorsConfigTuple = [
             this.currentSerial,
             1, // 1 = apply temporarily
@@ -372,8 +433,8 @@ export class DisplayConfigsManager {
             props,
         ];
         if (!monsCfg) {
-            console.error("DisplayProfiles@realh: MonitorsConfigTuple is " +
-                `${monsCfg}`);
+            console.error(
+                `DisplayProfiles@realh: MonitorsConfigTuple is ${monsCfg}`);
             return;
         }
         try {

@@ -8,7 +8,7 @@ const mainLoop = new GLib.MainLoop(null, false);
 async function showState(proxy: DisplayConfigProxy) {
     const dbusState = await proxy.getCurrentStateAsync();
     console.log("Got state");
-    const dispState = new DisplayState(dbusState, 0);
+    const dispState = new DisplayState(dbusState, 0, true);
     console.log("Built DisplayState from dbus tuple");
     const dispConf = dispState.getDisplayConfig();
     console.log(JSON.stringify(dispConf));

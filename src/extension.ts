@@ -50,7 +50,6 @@ export default class DisplayProfilesExtension extends Extension {
     override enable() {
         this.#log("Enabling DisplayProfiles extension");
         this.#manager.init();
-        this.#log("Manager initialised");
         this.#indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
         this.#icon = new St.Icon({
             gicon: new Gio.ThemedIcon({ name: 'video-display-symbolic' }),
