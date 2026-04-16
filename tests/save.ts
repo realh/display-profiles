@@ -1,6 +1,6 @@
 import GLib from "gi://GLib?version=2.0";
 
-import { DisplayConfigsManager } from "../src/data.js";
+import { DisplayConfigsManager } from "../src/manager.js";
 
 const mainLoop = new GLib.MainLoop(null, false);
 
