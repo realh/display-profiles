@@ -3,12 +3,9 @@ import GLib from "gi://GLib";
 import {
     compareLogicalMonitors,
     deepCopy,
-    describeDisplayConfig,
     DisplayConfig,
     DisplayState,
-    LogicalMonitor,
     monitorTransformNames,
-    PhysicalMonitor,
     pruneDisplayConfig,
     SavedDisplayConfig,
 } from "./data.js";
@@ -205,6 +202,7 @@ export class DisplayConfigsManager {
         } else {
             this.#favourites.unshift(current);
         }
+        this.#removeNonFavourites();
         for (const config of this.#favourites) {
             // Make sure the primary monitor is shown first in each config.
             config.logicalMonitors.sort((a, b) => {
@@ -263,38 +261,30 @@ export class DisplayConfigsManager {
         return matched;
     }
 
-    getConfigs(): DisplayConfig[] {
-        // After clicking stars, some of #favourites may have
-        // isFavourite = false. We should remove them at this point because
-        // this method is called when the UI is being refreshed.
-        const oldLen = this.#favourites.length;
-        this.#favourites = this.#favourites.filter((c) => {
-            return c.isFavourite || c.isCurrent;
-        });
-        const confs = this.#getConfigs(true);
-        this.#log(
-            `Removed ${oldLen - this.#favourites.length} unstarred ` +
-            `configs; now ${confs.length} including ` +
-            `${this.#currentState?.isFavourite ? "" : "un"}starred current`);
-        return confs;
-    }
-
     /**
      * Gets the list of configs for saving or showing in the UI. If
      * `includeCurrent` is true, the current state is included in the list
      * whether it's a favourite or not.
      */
-    #getConfigs(includeCurrent: boolean): DisplayConfig[] {
+    getConfigs(includeCurrent: boolean = true): DisplayConfig[] {
         const favs = deepCopy(this.#favourites);
-        // const s = this.#debug ?
-        //     `#getConfigs: ${favs.length} favourites, includeCurrent ` +
-        //           `was ${includeCurrent}` : "";
+        if (this.#debug) {
+            this.#log(`getConfigs: ${favs.length} favourites, ` +
+                      `includeCurrent ${includeCurrent}`);
+            if (!includeCurrent && this.#currentState?.isFavourite) {
+                this.#log("getConfigs: Forcing includeCurrent on because " +
+                          "currentState is favourite");
+            }
+        }
         includeCurrent ||= this.#currentState?.isFavourite || false;
         // this.#log(`${s}, now ${includeCurrent}`);
         if (includeCurrent && !favs.some((c) => c.isCurrent)) {
             const current = this.#currentState?.getDisplayConfig();
             if (current) {
                 favs.unshift(current);
+                this.#log(`Added current to favourites: now ${favs.length}`);
+            } else {
+                console.error("DisplayProfiles@realh: current state is null");
             }
         }
         return favs;
@@ -307,7 +297,7 @@ export class DisplayConfigsManager {
      */
     async saveFavourites(alwaysSaveCurrent: boolean): Promise<boolean> {
         const oldLen = this.#favourites.length;
-        const favs = this.#getConfigs(alwaysSaveCurrent).map(
+        const favs = this.getConfigs(alwaysSaveCurrent).map(
             pruneDisplayConfig);
         this.#log(`saveFavourites: Had ${oldLen} favourites, now have ` +
             `${favs.length}`);
@@ -398,19 +388,37 @@ export class DisplayConfigsManager {
      */
     updateFavourite(config: DisplayConfig) {
         if (config.id === this.#currentState?.id) {
+            this.#log(`Updating currentState ${config.id} favourite ` +
+                      `status to ${config.isFavourite}`);
             this.#currentState.isFavourite = config.isFavourite;
         }
         for (const cfg of this.#favourites) {
             if (cfg.id === config.id) {
+                this.#log(`Updating #favourites ${config.id} favourite ` +
+                          `status to ${config.isFavourite}`);
                 cfg.isFavourite = config.isFavourite;
-                return;
+                break;
             }
+        }
+        if (!config.isFavourite) {
+            this.#removeNonFavourites();
         }
         this.saveFavourites(false).then((ok) => {
             this.#log("Saved favourites: ok " + ok);
         }).catch((e) => {
             console.error("DisplayProfiles@realh: Error saving favourites:", e);
         });
+    }
+
+    #removeNonFavourites() {
+        this.#log(`Removing unstarred ex-favourites`);
+        const oldLen = this.#favourites.length;
+        this.#favourites = this.#favourites.filter((c) => {
+            return c.isFavourite || c.isCurrent;
+        });
+        const newLen = this.#favourites.length;
+        this.#log(
+            `Removed ${oldLen - newLen} unstarred configs; now ${newLen}`);
     }
 
     getUniqueId(): number {

@@ -35,6 +35,7 @@ export default class DisplayProfilesExtension extends Extension {
             if (closeMenu && this.#menu?.isOpen) {
                 this.#menu?.close();
             }
+            this.onDisplayStateChanged();
         },
         debug);
     #log: (...args: any) => void
@@ -89,7 +90,7 @@ export default class DisplayProfilesExtension extends Extension {
     }
 
     onDisplayStateChanged() {
-        this.#log("Display state changed: " +
+        this.#log("Display state/favourites changed :" +
                    (this.#manager.waiting ? "waiting" : "ready"));
         if (!this.#indicator) {
             console.error(
@@ -127,7 +128,7 @@ export default class DisplayProfilesExtension extends Extension {
             this.#icon ? this.#icon.opacity = 255 : undefined;
         }
 
-        this.#log("Rebuilding menu body table");
+        this.#log("Rebuilding menu body");
         menu?.removeAll();
         const menuItems = this.#menuBuilder.build(configs, waiting);
         for (const item of menuItems) {

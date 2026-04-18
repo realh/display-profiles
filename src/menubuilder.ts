@@ -1,7 +1,7 @@
 import Clutter from "gi://Clutter";
 import Gio from "gi://Gio";
 import St from "gi://St";
-import { DisplayConfig } from "./data.js";
+import { describeDisplayConfig, DisplayConfig } from "./data.js";
 import {
     PopupBaseMenuItem,
     PopupSeparatorMenuItem ,
@@ -237,7 +237,10 @@ export class DisplayProfilesMenuBuilder {
             radioButton.opacity = 128;
         }
         radioButton.connect("clicked", () => {
-            this.#onApplyConfig(config, false);
+            // Always close menu because right click doesn't work on the stars
+            // which would benefit from it more, so having it work here would be
+            // a bit quirky.
+            this.#onApplyConfig(config, true);
         });
         return radioButton;
     }
@@ -260,19 +263,27 @@ export class DisplayProfilesMenuBuilder {
         button.connect("clicked", () => {
             this.#onStarButtonClicked(config, stIcon, true);
         });
-        button.connect("button-release-event", (_actor, event) => {
-            if (event.get_button() == 3) {
-                this.#onStarButtonClicked(config, stIcon, false);
-                return true;
-            }
-            return false;
-        });
+        // button-release-event doesn't actually get called
+        // button.connect("button-release-event", (_actor, event) => {
+        //     this.#log(
+        //         `Star button (${event.get_button()}) released for ` +
+        //         `${describeDisplayConfig(config)}`);
+        //     if (event.get_button() == 2) {
+        //         this.#onStarButtonClicked(config, stIcon, false);
+        //         return true;
+        //     }
+        //     return false;
+        // });
         return button;
     }
 
     #onStarButtonClicked(config: DisplayConfig, icon: St.Icon,
                          closeMenu: boolean)
     {
+        this.#log(
+            `Star button clicked for ${config.id} ` +
+            `${describeDisplayConfig(config)}; ` +
+            `favourite was ${config.isFavourite}`);
         config.isFavourite = !config.isFavourite;
         icon.set_gicon(this.#getStarGIconForConfig(config));
         this.#onToggleFavourite(config, closeMenu);
