@@ -11,8 +11,6 @@ import {
     PhysicalMonitor,
     pruneDisplayConfig,
     SavedDisplayConfig,
-    SavedLogicalMonitor,
-    SavedPhysicalMonitor,
 } from "./data.js";
 import { DisplayConfigProxy } from "./dbusproxy.js";
 import { mkdirWithParentsAsync } from "./mkdirs.js";
@@ -96,44 +94,13 @@ export class DisplayConfigsManager {
         return favourites.map((f) => {
             return {
                 id: this.getUniqueId(),
-                logicalMonitors: this.#processLogicalMonitors(
-                    f.logicalMonitors),
+                logicalMonitors: f.logicalMonitors,
                 layoutMode: f.layoutMode,
                 isCurrent: false,
                 isFavourite: true,
                 isCompatible: true,
             };
         });
-    }
-
-    #processLogicalMonitors(logicalMonitors: SavedLogicalMonitor[]):
-        LogicalMonitor[]
-    {
-        return logicalMonitors.map((lm) => {
-            return {
-                x: lm.x,
-                y: lm.y,
-                scale: lm.scale,
-                transform: lm.transform,
-                primary: lm.primary,
-                physicalMonitors: this.#processPhysicalMonitors(
-                    lm.physicalMonitors),
-            };
-        })
-    }
-
-    #processPhysicalMonitors(physicalMonitors: SavedPhysicalMonitor[]):
-        PhysicalMonitor[]
-    {
-        return physicalMonitors.map((pm) => {
-            return {
-                connector: pm.connector,
-                modeId: pm.modeId,
-                underscanning: pm.underscanning,
-                preferredMode: "",
-                preferredScale: 1,
-            };
-        })
     }
 
     async #getInitialDBusState(): Promise<DisplayState> {
@@ -192,7 +159,8 @@ export class DisplayConfigsManager {
                     }
                     const decoder = new TextDecoder();
                     const jsonStr = decoder.decode(contents);
-                    const favourites = JSON.parse(jsonStr) as SavedDisplayConfig[];
+                    const favourites = JSON.parse(jsonStr) as
+                        SavedDisplayConfig[];
                     resolve(favourites);
                 } catch (e) {
                     if (!(e instanceof GLib.Error) ||
@@ -250,28 +218,6 @@ export class DisplayConfigsManager {
             });
             config.isCompatible =
                 this.#currentState?.checkCompatibility(config) || false;
-            if (config.isCompatible) {
-                // Fix preferred* fields in physical monitors.
-                for (const lm of config.logicalMonitors) {
-                    for (let i = 0; i < lm.physicalMonitors.length; i++) {
-                        const favPm = lm.physicalMonitors[i];
-                        const statePm = this.#currentState.physicalMonitors.get(
-                            favPm.connector);
-                        if (statePm) {
-                            // Compatibility has already been checked.
-                            favPm.preferredMode = statePm.preferredMode;
-                            favPm.preferredScale = statePm.preferredScale;
-                        } else {
-                            // ...so this shouldn't happen
-                            config.isCompatible = false;
-                            console.error("Favourite " +
-                                `${describeDisplayConfig(config)} was ` +
-                                "erroneously marked compatible with state " +
-                                this.#currentState.describe());
-                        }
-                    }
-                }
-            }
         }
         this.#waiting = 0;
         this.#stateChangedCallback(this);

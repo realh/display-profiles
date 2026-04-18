@@ -19,29 +19,15 @@ export function formatScale(scale: number): string {
     return `${Math.floor(scale * 100)}%`;
 }
 
-export interface SavedPhysicalMonitor {
+/**
+ * We can just ignore the preferred mode and scale because the info from DBus
+ * is inconsistent; the same interface can be used in memory and in JSON.
+ */
+export interface PhysicalMonitor {
     readonly connector: string;
     readonly modeId: string;
     /** undefined means underscanning is unsupported */
     readonly underscanning: boolean | undefined;
-}
-
-export interface PhysicalMonitor extends SavedPhysicalMonitor {
-    preferredMode: string;
-    preferredScale: number;
-}
-
-/**
- * Removes the fields we don't want to save to favourites.
- */
-export function prunePhysicalMonitor(pm: PhysicalMonitor):
-    SavedPhysicalMonitor
-{
-    return {
-        connector: pm.connector,
-        modeId: pm.preferredMode,
-        underscanning: pm.underscanning,
-    };
 }
 
 function comparePhysicalMonitors(
@@ -59,42 +45,20 @@ function comparePhysicalMonitors(
     if (pm1.underscanning !== pm2.underscanning) {
         return pm1.underscanning ? -1 : 1;
     }
-    cmp = pm1.preferredMode.localeCompare(pm2.preferredMode);
-    if (cmp !== 0) {
-        return cmp;
-    }
-    return Math.sign(pm1.preferredScale - pm2.preferredScale);
+    return 0;
 }
 
 interface PhysicalMonitorAndModes extends PhysicalMonitor {
     readonly supportedModes: Map<string, ModeScales>;
 }
 
-export interface LogicalMonitorBase<T extends SavedPhysicalMonitor> {
+export interface LogicalMonitor {
     readonly x: number;
     readonly y: number;
     readonly scale: number;
     readonly transform: string;
     readonly primary: boolean;
-    readonly physicalMonitors: T[];
-}
-
-export type SavedLogicalMonitor = LogicalMonitorBase<SavedPhysicalMonitor>;
-
-export type LogicalMonitor = LogicalMonitorBase<PhysicalMonitor>;
-
-/**
- * Removes the fields we don't want to save to favourites.
- */
-export function pruneLogicalMonitor(lm: LogicalMonitor): SavedLogicalMonitor {
-    return {
-        x: lm.x,
-        y: lm.y,
-        scale: lm.scale,
-        transform: lm.transform,
-        primary: lm.primary,
-        physicalMonitors: lm.physicalMonitors.map(prunePhysicalMonitor),
-    };
+    readonly physicalMonitors: PhysicalMonitor[];
 }
 
 export function deepCopy<T>(obj: T): T {
@@ -133,16 +97,12 @@ export function compareLogicalMonitors(
     return 0;
 }
 
-export interface DisplayConfigBase<T extends SavedPhysicalMonitor> {
-    readonly logicalMonitors: LogicalMonitorBase<T>[];
+export interface SavedDisplayConfig {
+    readonly logicalMonitors: LogicalMonitor[];
     readonly layoutMode: "logical" | "physical";
 }
 
-export type SavedDisplayConfig = DisplayConfigBase<SavedPhysicalMonitor>;
-
-export function describeDisplayConfig<T extends SavedPhysicalMonitor>(
-    config: DisplayConfigBase<T>,
-): string {
+export function describeDisplayConfig(config: SavedDisplayConfig): string {
     const lms = config.logicalMonitors.flatMap(lm => {
         const scale = formatScale(lm.scale);
         return lm.physicalMonitors.map(pm => {
@@ -161,7 +121,7 @@ export function describeDisplayConfig<T extends SavedPhysicalMonitor>(
  * status is toggled in the UI - this is because the DisplayConfig[] passed to
  * the UI is a deep copy of #allConfigs and/or #currentState.
  */
-export interface DisplayConfig extends DisplayConfigBase<PhysicalMonitor> {
+export interface DisplayConfig extends SavedDisplayConfig {
     id: number;
     isCurrent: boolean;
     isFavourite: boolean;
@@ -173,7 +133,7 @@ export interface DisplayConfig extends DisplayConfigBase<PhysicalMonitor> {
  */
 export function pruneDisplayConfig(dc: DisplayConfig): SavedDisplayConfig {
     return {
-        logicalMonitors: dc.logicalMonitors.map(pruneLogicalMonitor),
+        logicalMonitors: dc.logicalMonitors,
         layoutMode: dc.layoutMode,
     };
 }
@@ -238,8 +198,6 @@ export class DisplayState {
         for (const pm of physicalMonitors) {
             const connector = pm[0][0];
             let modeId = "";
-            let preferredMode = "";
-            let preferredScale = 1;
             const supportedModes = new Map<string, ModeScales>;
 
             for (const mode of pm[1]) {
@@ -248,21 +206,14 @@ export class DisplayState {
                     if (modeId !== "" && this.#debug) {
                         this.#log(
                             `${connector} has more than one current mode: ` +
-                            `${modeId} ${preferredScale} and ` +
-                            `${mode[0]} ${mode[4]}`);
+                            `${modeId} and ` +
+                            `${mode[0]} (scale ${formatScale(mode[4])})`);
                     }
                     modeId = mode[0];
-                    preferredScale = mode[4];
                     this.#log(`Current mode on ${connector} is ${mode[0]} ` +
                              `pref scale ${formatScale(mode[4])}`);
                 }
                 if (props["is-preferred"]) {
-                    if (preferredMode !== "" && this.#debug) {
-                        this.#log(
-                            `${connector} has more than one preferred mode: ` +
-                            `${preferredMode} and ${mode[0]}`);
-                    }
-                    preferredMode = mode[0];
                     this.#log(`Preferred mode on ${connector} is ${mode[0]} ` +
                              formatScale(mode[4]));
                 }
@@ -276,8 +227,6 @@ export class DisplayState {
                 connector,
                 modeId,
                 underscanning,
-                preferredMode,
-                preferredScale,
                 supportedModes
             });
         }
@@ -291,13 +240,7 @@ export class DisplayState {
                     if (pm === undefined) {
                         throw new Error(`Physical monitor ${pm} not found`);
                     }
-                    return {
-                        connector: pm.connector,
-                        modeId: pm.modeId,
-                        underscanning: pm.underscanning,
-                        preferredMode: pm.preferredMode,
-                        preferredScale: pm.preferredScale
-                    };
+                    return pm;
                 });
                 let i = lm[3];
                 if (i < 0 || i >= monitorTransformNames.length) {
@@ -333,9 +276,7 @@ export class DisplayState {
         };
     }
 
-    checkCompatibility<T extends SavedPhysicalMonitor>(
-        config: DisplayConfigBase<T>): boolean
-    {
+    checkCompatibility(config: SavedDisplayConfig): boolean {
         if (config.layoutMode !== this.layoutMode &&
             !this.supportsChangingLayoutMode)
         {
@@ -359,8 +300,8 @@ export class DisplayState {
         let s = "DisplayState; logical monitors:\n" +
             describeDisplayConfig(this.getDisplayConfig()) +
             "\nphysical monitors:\n";
-        for (const [connector, pm] of this.physicalMonitors) {
-            s += `${connector}: pref ${pm.preferredMode} ${pm.preferredScale}\n`;
+        for (const [connector, _pm] of this.physicalMonitors) {
+            s += `${connector}\n`;
         }
         return s;
     }

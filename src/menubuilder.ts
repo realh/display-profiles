@@ -169,7 +169,6 @@ export class DisplayProfilesMenuBuilder {
                             pm.connector,
                             false,
                             config.isCompatible,
-                            pm.preferredMode == pm.modeId
                         ),
                         col++, i, 1, 1
                     );
@@ -179,33 +178,24 @@ export class DisplayProfilesMenuBuilder {
                         i > 0 ? "mirrored" : pm.modeId,
                         true,
                         config.isCompatible,
-                        pm.preferredMode == pm.modeId
                     ),
                     col++, i, 1, 1);
-                this.#log(
-                    `Actual ${pm.modeId} vs preferred ${pm.preferredMode}: ` +
-                    `${pm.preferredMode == pm.modeId}`);
                 if (i == 0 && showScales) {
                     layout.attach(
                         this.#makeLabel(
                             scale,
                             false,
                             config.isCompatible,
-                            pm.preferredScale == lm.scale
                         ),
                         col++, i, 1, 1
                     );
                 }
-                this.#log(`${pm.modeId}: actual scale ${lm.scale} vs ` +
-                         `preferred ${pm.preferredScale}: ` +
-                         `${pm.preferredScale == lm.scale}`);
                 if (i == 0 && showTransforms) {
                     layout.attach(
                         this.#makeLabel(
                             transform,
                             false,
                             config.isCompatible,
-                            false
                         ),
                         col++, i, 1, 1
                     );
@@ -307,8 +297,8 @@ export class DisplayProfilesMenuBuilder {
         }
     }
 
-    #makeLabel(text: string, expand: boolean,
-               isCompatible: boolean = true, isPreferred: boolean): St.Label
+    #makeLabel(text: string, expand: boolean, isCompatible: boolean = true):
+        St.Label
     {
         const label = new St.Label({
             text,
@@ -318,9 +308,6 @@ export class DisplayProfilesMenuBuilder {
         });
         if (!isCompatible) {
             label.style = "color: #ff9060;";
-        } else if (isPreferred) {
-            label.style = "color: #60ff90;";
-        }
-        return label;
+        }        return label;
     }
 };
