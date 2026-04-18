@@ -269,7 +269,7 @@ export class DisplayConfigsManager {
         // this method is called when the UI is being refreshed.
         const oldLen = this.#favourites.length;
         this.#favourites = this.#favourites.filter((c) => {
-            return c.isFavourite || c.isFavourite;
+            return c.isFavourite || c.isCurrent;
         });
         const confs = this.#getConfigs(true);
         this.#log(
