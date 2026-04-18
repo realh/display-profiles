@@ -17,6 +17,17 @@ npm is required because the extension is written in typescript.
   * Run `gnome-extensions enable display-profiles@realh`
   * or enable it with the GNOME Extensions app
 
+
+## Usage
+
+Use GNOME settings to configure the displays how you want. Click on the
+display-profiles panel icon to open the menu. Click on a hollow star to add a
+profile to the saved favourites. Existing favourites are shown with a filled star
+which can be clicked to remove it from the favourites. Click elsewhere on a
+profile to activate it as the current mode. Note that mode changes made by
+display-profiles are applied without asking for confirmation and do not
+persist after logging out.
+
 ## Licence
 
  display-profiles is free software: you can redistribute it and/or modify it
