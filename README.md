@@ -10,10 +10,10 @@ npm is required because the extension is written in typescript.
 1. `npm install`
 1. `npm run build`
 1. One of:
-  * `ln -s $(pwd)/dist/src ~/.local/share/gnome-shell/extensions/display-profiles@realh`
+  * `ln -s "$(pwd)/dist/src" ~/.local/share/gnome-shell/extensions/display-profiles@realh`
   * `cp -r dist/src ~/.local/share/gnome-shell/extensions/display-profiles@realh`
 1. Log out of GNOME and log back in
-1.
+1. One of:
   * Run `gnome-extensions enable display-profiles@realh`
   * or enable it with the GNOME Extensions app
 
