@@ -155,14 +155,14 @@ export class DisplayProfilesMenuBuilder {
         } else {
             hbox.add_child(grid);
         }
+        let rowNum = 0;
         for (const lm of config.logicalMonitors) {
             const scale = showScales ? `${Math.floor(lm.scale * 100)}%` : "";
             const transform = showTransforms ? lm.transform : "";
-            for (let i = 0; i < lm.physicalMonitors.length; i++) {
+            for (let physI = 0; physI < lm.physicalMonitors.length; ++physI) {
+                const pm = lm.physicalMonitors[physI];
                 // Each row in the grid contains 1 to 4 columns
                 let col = 0;
-                const pm = lm.physicalMonitors[i];
-
                 if (showConnectors) {
                     layout.attach(
                         this.#makeLabel(
@@ -170,36 +170,40 @@ export class DisplayProfilesMenuBuilder {
                             false,
                             config.isCompatible,
                         ),
-                        col++, i, 1, 1
+                        col++, rowNum, 1, 1
                     );
                 }
                 layout.attach(
                     this.#makeLabel(
-                        i > 0 ? "mirrored" : pm.modeId,
+                        physI > 0 ? "mirrored" : pm.modeId,
                         true,
                         config.isCompatible,
                     ),
-                    col++, i, 1, 1);
-                if (i == 0 && showScales) {
+                    col++, rowNum, 1, 1);
+                // In mirrored layouts only the first physical monitor
+                // belonging to a particular logical monitor needs to show
+                // scale and transform.
+                if (physI == 0 && showScales) {
                     layout.attach(
                         this.#makeLabel(
                             scale,
                             false,
                             config.isCompatible,
                         ),
-                        col++, i, 1, 1
+                        col++, rowNum, 1, 1
                     );
                 }
-                if (i == 0 && showTransforms) {
+                if (physI == 0 && showTransforms) {
                     layout.attach(
                         this.#makeLabel(
                             transform,
                             false,
                             config.isCompatible,
                         ),
-                        col++, i, 1, 1
+                        col++, rowNum, 1, 1
                     );
                 }
+                rowNum++;
             }
         }
 
