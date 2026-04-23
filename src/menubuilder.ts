@@ -94,7 +94,14 @@ export class DisplayProfilesMenuBuilder {
         });
         this.#log(`${showScales ? "Showing" : "Not showing"} scales`);
 
+        let lastWasMulti = false;
         for (const cfg of configs) {
+            let multi = cfg.logicalMonitors.length > 1 ||
+                cfg.logicalMonitors[0]?.physicalMonitors.length > 1;
+            if (multi || lastWasMulti) {
+                items.push(new PopupSeparatorMenuItem());
+            }
+            lastWasMulti = multi;
             this.#addConfigToMenu(cfg, items, waiting,
                 showTransforms, showConnectors, showScales);
         }
@@ -111,11 +118,6 @@ export class DisplayProfilesMenuBuilder {
                      waiting: boolean, showTransforms: boolean,
                      showConnectors: boolean, showScales: boolean)
     {
-        const numMonitors = config.logicalMonitors.reduce(
-            (n, m) => m.physicalMonitors.length + n, 0);
-        if (items.length > 0 && numMonitors > 1) {
-            items.push(new PopupSeparatorMenuItem());
-        }
         const hbox = new St.BoxLayout({
             // style_class: "dispprofs-config-row",
             reactive: !waiting,
