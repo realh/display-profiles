@@ -26,6 +26,12 @@ export class DisplayProfilesMenuBuilder {
     #onApplyConfig: (config: DisplayConfig, closeMenu: boolean) => void
     #onToggleFavourite: ToggleFavouriteCallback;
 
+    #waiting: boolean = false;
+    #showConnectors: boolean = false;
+    #showScales: boolean = false;
+    #showTransforms: boolean = false;
+    #showUnderscan: boolean = false;
+
     constructor(
         onApplyConfig: ApplyConfigCallback,
         onToggleFavourite: ToggleFavouriteCallback,
@@ -48,6 +54,8 @@ export class DisplayProfilesMenuBuilder {
     }
 
     #build(configs: DisplayConfig[], waiting: boolean): PopupBaseMenuItem[] {
+        this.#waiting = waiting;
+
         this.#log(`${configs.length} configs to show`);
         if (configs.length == 0) {
             return [];
@@ -61,17 +69,18 @@ export class DisplayProfilesMenuBuilder {
         });
 
         // Only show the transforms column if at least one != "none"
-        const showTransforms = configs.some(c => {
+        this.#showTransforms = configs.some(c => {
             return c.logicalMonitors.some(m => {
                 return m.transform !== "none";
             });
         });
-        this.#log(`${showTransforms ? "Showing" : "Not showing"} transforms`);
+        this.#log(`${this.#showTransforms ? "Showing" : "Not showing"} ` +
+                  `transforms`);
 
         // Only show connectors if more than one is referenced
         const firstConnector =
             configs[0].logicalMonitors[0].physicalMonitors[0].connector;
-        const showConnectors = configs.some(c => {
+        this.#showConnectors = configs.some(c => {
             if (c.logicalMonitors.length > 1) {
                 return true;
             }
@@ -84,15 +93,24 @@ export class DisplayProfilesMenuBuilder {
             }
             return false;
         });
-        this.#log(`${showConnectors ? "Showing" : "Not showing"} connectors`);
+        this.#log(`${this.#showConnectors ? "Showing" : "Not showing"} ` +
+                  `connectors`);
 
         // Only show scales if any are != 100%
-        const showScales = configs.some(c => {
+        this.#showScales = configs.some(c => {
             return c.logicalMonitors.some(m => {
-                return m.scale != 1.0;
+                return m.scale != 1;
             });
         });
-        this.#log(`${showScales ? "Showing" : "Not showing"} scales`);
+        this.#log(`${this.#showScales ? "Showing" : "Not showing"} scales`);
+
+        // Only show underscan indicator if at least one monitor is using it
+        this.#showUnderscan = configs.some(c => {
+            return c.logicalMonitors.some(lm => {
+                return lm.physicalMonitors.some(pm => pm.underscanning);
+            });
+        });
+
 
         let lastWasMulti = false;
         for (const cfg of configs) {
@@ -102,8 +120,7 @@ export class DisplayProfilesMenuBuilder {
                 items.push(new PopupSeparatorMenuItem());
             }
             lastWasMulti = multi;
-            this.#addConfigToMenu(cfg, items, waiting,
-                showTransforms, showConnectors, showScales);
+            this.#addConfigToMenu(cfg, items);
         }
 
         return items;
@@ -114,14 +131,11 @@ export class DisplayProfilesMenuBuilder {
      *
      * @param first: True if this is the first config
      */
-    #addConfigToMenu(config: DisplayConfig, items: PopupBaseMenuItem[],
-                     waiting: boolean, showTransforms: boolean,
-                     showConnectors: boolean, showScales: boolean)
-    {
+    #addConfigToMenu(config: DisplayConfig, items: PopupBaseMenuItem[]) {
         const hbox = new St.BoxLayout({
             // style_class: "dispprofs-config-row",
-            reactive: !waiting,
-            can_focus: config.isCompatible && !waiting,
+            reactive: !this.#waiting,
+            can_focus: config.isCompatible && !this.#waiting,
             vertical: false,
             orientation: Clutter.Orientation.HORIZONTAL,
             x_expand: true,
@@ -129,7 +143,7 @@ export class DisplayProfilesMenuBuilder {
         });
 
         // Column 0: Radio button
-        const radioButton = this.#makeRadioButton(config, waiting);
+        const radioButton = this.#makeRadioButton(config);
         hbox.add_child(radioButton);
 
         // The middle column of the menu item row is a clickable grid of
@@ -143,7 +157,7 @@ export class DisplayProfilesMenuBuilder {
             x_expand: true,
             x_align: Clutter.ActorAlign.FILL,
         });
-        if (config.isCompatible && !waiting) {
+        if (config.isCompatible && !this.#waiting) {
             const button = new St.Button({
                 child: grid,
                 reactive: true,
@@ -159,13 +173,14 @@ export class DisplayProfilesMenuBuilder {
         }
         let rowNum = 0;
         for (const lm of config.logicalMonitors) {
-            const scale = showScales ? `${Math.floor(lm.scale * 100)}%` : "";
-            const transform = showTransforms ? lm.transform : "";
+            const scale = this.#showScales ? `${Math.floor(lm.scale * 100)}%` :
+                "";
+            const transform = this.#showTransforms ? lm.transform : "";
             for (let physI = 0; physI < lm.physicalMonitors.length; ++physI) {
                 const pm = lm.physicalMonitors[physI];
                 // Each row in the grid contains 1 to 4 columns
                 let col = 0;
-                if (showConnectors) {
+                if (this.#showConnectors) {
                     layout.attach(
                         this.#makeLabel(
                             pm.connector,
@@ -185,7 +200,7 @@ export class DisplayProfilesMenuBuilder {
                 // In mirrored layouts only the first physical monitor
                 // belonging to a particular logical monitor needs to show
                 // scale and transform.
-                if (physI == 0 && showScales) {
+                if (physI == 0 && this.#showScales) {
                     layout.attach(
                         this.#makeLabel(
                             scale,
@@ -195,10 +210,20 @@ export class DisplayProfilesMenuBuilder {
                         col++, rowNum, 1, 1
                     );
                 }
-                if (physI == 0 && showTransforms) {
+                if (physI == 0 && this.#showTransforms) {
                     layout.attach(
                         this.#makeLabel(
                             transform,
+                            false,
+                            config.isCompatible,
+                        ),
+                        col++, rowNum, 1, 1
+                    );
+                }
+                if (physI == 0 && this.#showUnderscan) {
+                    layout.attach(
+                        this.#makeLabel(
+                            pm.underscanning ? "u" : "",
                             false,
                             config.isCompatible,
                         ),
@@ -210,7 +235,7 @@ export class DisplayProfilesMenuBuilder {
         }
 
         // 3rd column: Star icon
-        const starButton = this.#makeStarButton(config, waiting);
+        const starButton = this.#makeStarButton(config);
         hbox.add_child(starButton);
 
         // hbox needs to go in a PopupMenuSection so the buttons can handle
@@ -218,12 +243,12 @@ export class DisplayProfilesMenuBuilder {
         const item = new PopupBaseMenuItem();
         // Remove the default "menu item" styling because each item contains
         // a row of 3 pseudo-items.
-        item.remove_style_class_name('popup-menu-item');
+        item.remove_style_class_name("popup-menu-item");
         item.actor.add_child(hbox);
         items.push(item);
     }
 
-    #makeRadioButton(config: DisplayConfig, waiting: boolean): St.Button {
+    #makeRadioButton(config: DisplayConfig): St.Button {
         const radioIcon = new St.Icon({
             gicon: new Gio.ThemedIcon({
                 name: config.isCurrent ? "radio-checked-symbolic" :
@@ -234,8 +259,8 @@ export class DisplayProfilesMenuBuilder {
         });
         const radioButton = new St.Button({
             child: radioIcon,
-            reactive: config.isCompatible && !waiting,
-            can_focus: config.isCompatible && !waiting,
+            reactive: config.isCompatible && !this.#waiting,
+            can_focus: config.isCompatible && !this.#waiting,
             // style_class: "dispprofs-radio-button"
             style_class: "popup-menu-item",
         });
@@ -251,17 +276,15 @@ export class DisplayProfilesMenuBuilder {
         return radioButton;
     }
 
-    #makeStarButton(config: DisplayConfig, waiting: boolean):
-        St.Button
-    {
+    #makeStarButton(config: DisplayConfig): St.Button {
         const stIcon = new St.Icon({
             gicon: this.#getStarGIconForConfig(config),
             style_class: "popup-menu-icon"
         });
         const button = new St.Button({
             child: stIcon,
-            reactive: !waiting,
-            can_focus: !waiting,
+            reactive: !this.#waiting,
+            can_focus: !this.#waiting,
             // style_class: "dispprofs-star-button",
             x_expand: false,
             style_class: "popup-menu-item",
