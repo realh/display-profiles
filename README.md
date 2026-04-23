@@ -28,8 +28,9 @@ profile to activate it as the current mode. Note that mode changes made by
 display-profiles are applied without asking for confirmation and do not
 persist after logging out.
 
-A trailing 'u' in a mode description means that the display is underscanning
-ie compensating for a TV that is overscanning.
+In multimonitor configurations, the primary display is shown first in each
+profile. A trailing 'u' in a mode description means that the display is
+underscanning ie given margins to compensate for a TV that is overscanning.
 
 ## Licence
 
